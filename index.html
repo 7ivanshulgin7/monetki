@@ -198,12 +198,28 @@ const ICONS={
   cup:'M5 8h12v5a5 5 0 0 1-5 5h-2a5 5 0 0 1-5-5zM17 10h2a2 2 0 0 1 0 4h-2M9 3v2M13 3v2', home:'M3 11l9-7 9 7M5 10v10h14V10M10 20v-5h4v5',
   bag:'M5 8h14l-1 12H6zM9 8V6a3 3 0 0 1 6 0v2', car:'M4 16h16M6 16l1.5-5h9L18 16M5 16v3M19 16v3M8 13.5h.01M16 13.5h.01',
   person:'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0', heart:'M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z',
-  scale:'M12 4v16M7 20h10M4 8h16M6 8l-3 6a3 3 0 0 0 6 0zM18 8l-3 6a3 3 0 0 0 6 0z', plus:'M12 5v14M5 12h14'
+  scale:'M12 4v16M7 20h10M4 8h16M6 8l-3 6a3 3 0 0 0 6 0zM18 8l-3 6a3 3 0 0 0 6 0z', plus:'M12 5v14M5 12h14',
+  baby:'M12 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM7 21v-5a5 5 0 0 1 10 0v5M9 13l-3 3M15 13l3 3', med:'M9 3h6v6h6v6h-6v6H9v-6H3V9h6z', receipt:'M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2zM9 8h6M9 12h6'
 };
 const CK_ICON={BarChart:'trend',Hobbies:'star',ShoppingBag:'bag',Card:'card',Car:'car',Bank:'bank',Cash:'wallet',Flower:'heart',Book:'star',Property:'home',Eating:'cup',House:'home',Groceries:'cart',Woman:'person',Debt:'scale'};
 const LAYERS={obl:{n:'Обязательное',c:'--l-obl'},base:{n:'Быт',c:'--l-base'},irr:{n:'Нерегулярное',c:'--l-irr'},hob:{n:'Хобби',c:'--l-hob'}};
 const DEFAULT_LAYER={'Жена':'obl','Продукты':'base','Перекус':'base','Семья':'base','На себя':'base','Авто':'irr','Покупки':'irr','Убытки':'irr'};
 const EXP_ORDER=['Продукты','Перекус','Семья','Покупки','Авто','Жена','На себя','Убытки'];
+// Базовая структура для «С нуля»: категории с подкатегориями (подкатегории — готовые метки)
+const BASE={
+  in:[['Зарплата','job'],['Подработка','trend'],['Прочее','star']],
+  acc:[['Кошелёк','wallet'],['Карта','card'],['Вклад','bank',{reval:true,revalDays:30}]],
+  exp:[['Магазин','cart','base',['Продукты','Алкоголь','Хозтовары']],
+       ['Перекус','cup','base',['Кофе','Столовая','Кафе']],
+       ['Дом','home','obl',['Коммуналка','Связь','Интернет','Ремонт']],
+       ['Ребёнок','baby','obl',['Питание','Одежда','Врачи','Игрушки']],
+       ['Жена','heart','irr',['Подарки','Цветы','Её личное']],
+       ['Авто','car','irr',['Бензин','Ремонт','Мойка','Штрафы']],
+       ['На себя','person','hob',['Одежда','Стрижка','Хобби','Развлечения']],
+       ['Здоровье','med','obl',['Аптека','Врачи']],
+       ['Платежи','receipt','obl',['Кредит','Подписки']],
+       ['Прочее','scale','irr',['Неучтёнка','Потери']]]
+};
 const IN_ORDER=['ЗП','Активы','Авито','Прочее'];
 const ACC_ORDER=['Кошелек','Карта','ЦифБрок','Вклад ₽'];
 const MON=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
@@ -392,7 +408,7 @@ function renderEntry(){
   const a=byId(E.from),b=byId(E.to);
   const opts=(g,sel)=>S.items.filter(x=>g.includes(x.g)&&(!x.hidden||x.id===sel)).map(x=>'<option value="'+x.id+'"'+(x.id===sel?' selected':'')+'>'+esc(x.name)+'</option>').join('');
   const fromG=b&&b.g==='acc'?['in','acc']:['acc'],toG=a&&a.g==='in'?['acc']:['acc','exp'];
-  const tags=b&&b.g==='exp'?frequentTags(b.id):[];
+  const tags=b&&b.g==='exp'?[...new Set([...(b.subs||[]),...frequentTags(b.id).filter(t=>!(b.subs||[]).some(x=>x.toLowerCase()===t.toLowerCase()))])].slice(0,10):[];
   const y=new Date();y.setDate(y.getDate()-1);const yd=y.toISOString().slice(0,10);
   $('panel').innerHTML=(a&&a.g==='acc'&&!b?'<button class="btn" id="e-reval">'+(a.reval?'Переоценить ':'Сверить остаток: ')+esc(a.name)+'</button>':'')+
    '<div class="row"><div class="pair"><span style="background:'+(a?colorVar[a.g]:'var(--muted)')+'">'+esc(a?a.name:'Откуда?')+'</span>→<span style="background:'+(b?colorVar[b.g]:'var(--muted)')+'">'+esc(b?b.name:'Куда?')+'</span></div><button class="x" id="e-close" aria-label="Закрыть">✕</button></div>'+
@@ -629,6 +645,7 @@ function openItemEdit(id,g){
    '<label class="field">Название<input id="i-name" value="'+esc(it.name)+'" maxlength="30"></label>'+
    '<div class="chips" id="i-icons">'+Object.keys(ICONS).filter(k=>k!=='plus').map(k=>'<button class="chip" data-icon="'+k+'" aria-pressed="'+(it.icon===k)+'" aria-label="'+k+'">'+svg(ICONS[k],18,'currentColor')+'</button>').join('')+'</div>'+
    (it.g==='acc'&&!id?'<label class="field">Начальный остаток<input id="i-start" inputmode="numeric" value="0"></label>':'')+
+   (it.g==='exp'?'<label class="field">Подкатегории (через запятую)<input id="i-subs" value="'+esc((it.subs||[]).join(', '))+'" placeholder="Продукты, Алкоголь"></label>':'')+
    (it.g==='exp'?'<div class="field">Тип трат<div class="chips">'+Object.keys(LAYERS).map(k=>'<button class="chip" data-layer="'+k+'" aria-pressed="'+((it.layer||'base')===k)+'">'+LAYERS[k].n+'</button>').join('')+'</div></div>':'')+
    (it.g==='acc'?'<div class="field">Напоминать о переоценке<div class="chips">'+[[0,'Нет'],[7,'Раз в неделю'],[14,'Раз в 2 недели'],[30,'Раз в месяц']].map(p=>'<button class="chip" data-rv="'+p[0]+'" aria-pressed="'+((it.reval?(it.revalDays||30):0)===p[0])+'">'+p[1]+'</button>').join('')+'</div></div>':'')+
    '<button class="btn primary" id="i-save">Сохранить</button>'+(id?'<button class="btn" id="i-hide">'+(it.hidden?'Показывать':'Скрыть с экрана')+'</button>':'');
@@ -639,7 +656,8 @@ function openItemEdit(id,g){
   $('panel').querySelectorAll('[data-layer]').forEach(b=>b.onclick=()=>{layer=b.dataset.layer;$('panel').querySelectorAll('[data-layer]').forEach(x=>x.setAttribute('aria-pressed',x===b))});
   $('i-save').onclick=()=>{const n=$('i-name').value.trim();if(!n){toast('Введи название');return}
     const rvf=it.g==='acc'?{reval:rv>0,revalDays:rv||undefined}:{};
-    if(id){it.name=n;it.icon=icon;if(it.g==='exp')it.layer=layer;Object.assign(it,rvf)}else S.items.push(Object.assign({id:uid('i'),g:it.g,name:n,icon,start:+($('i-start')&&$('i-start').value)||0,layer:it.g==='exp'?layer:undefined},rvf));
+    const subs=$('i-subs')?$('i-subs').value.split(',').map(x=>x.trim()).filter(Boolean):undefined;
+    if(id){it.name=n;it.icon=icon;if(it.g==='exp'){it.layer=layer;it.subs=subs}Object.assign(it,rvf)}else S.items.push(Object.assign({id:uid('i'),g:it.g,name:n,icon,start:+($('i-start')&&$('i-start').value)||0,layer:it.g==='exp'?layer:undefined,subs:it.g==='exp'?subs:undefined},rvf));
     persist();closeSheet();render()};
   if(id)$('i-hide').onclick=()=>{it.hidden=!it.hidden;persist();closeSheet();render()};
 }
@@ -707,8 +725,11 @@ $('file-csv').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(
   try{const N=importCK(await f.text());S=N;persist();tab='coins';month=ym(today());render();toast('Загружено: '+fmt(N.ops.length)+' операций')}
   catch(err){toast(err.message||'Не удалось прочитать файл')}};
 $('fr-import').onclick=()=>$('file-csv').click();
-$('fr-empty').onclick=()=>{S=blank();const w=uid('i'),c=uid('i');S.items.push({id:uid('i'),g:'in',name:'Зарплата',icon:'job'},{id:w,g:'acc',name:'Кошелёк',icon:'wallet',start:0},{id:c,g:'acc',name:'Карта',icon:'card',start:0});
-  for(const n of EXP_ORDER)S.items.push({id:uid('i'),g:'exp',name:n,icon:'star',layer:DEFAULT_LAYER[n]||'base'});persist();render()};
+$('fr-empty').onclick=()=>{S=blank();
+  for(const [n,ic] of BASE.in)S.items.push({id:uid('i'),g:'in',name:n,icon:ic});
+  for(const [n,ic,x] of BASE.acc)S.items.push(Object.assign({id:uid('i'),g:'acc',name:n,icon:ic,start:0},x||{}));
+  for(const [n,ic,l,subs] of BASE.exp)S.items.push({id:uid('i'),g:'exp',name:n,icon:ic,layer:l,subs:subs.slice()});
+  persist();render()};
 
 /* ---------- общее ---------- */
 function toast(s){const t=$('toast');t.textContent=s;t.hidden=false;clearTimeout(toast.h);toast.h=setTimeout(()=>t.hidden=true,2400)}
