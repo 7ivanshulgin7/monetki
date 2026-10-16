@@ -680,20 +680,37 @@ function openItemEdit(id,g){
    (it.g==='acc'&&!id?'<label class="field">Начальный остаток<input id="i-start" inputmode="numeric" value="0"></label>':'')+
    (it.g==='exp'?'<label class="field">Подкатегории (через запятую)<input id="i-subs" value="'+esc((it.subs||[]).join(', '))+'" placeholder="Продукты, Алкоголь"></label>':'')+
    (it.g==='exp'?'<div class="field">Тип трат категории<div class="chips">'+Object.keys(LAYERS).map(k=>'<button class="chip" data-layer="'+k+'" aria-pressed="'+((it.layer||'base')===k)+'">'+LAYERS[k].n+'</button>').join('')+'</div></div>':'')+
-   (it.g==='exp'&&(it.subs||[]).length?'<div class="field">Тип у подкатегорий'+(it.subs||[]).map((sb,i)=>{const cur=(it.subLayer||{})[sb.toLowerCase()]||'';return '<div class="row" style="font-size:14px;color:var(--fg)"><span class="grow">'+esc(sb)+'</span><select data-sl="'+esc(sb.toLowerCase())+'" aria-label="Тип для '+esc(sb)+'" style="border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 8px;min-height:36px;color:var(--fg)"><option value=""'+(cur?'':' selected')+'>как у категории</option>'+Object.keys(LAYERS).map(k=>'<option value="'+k+'"'+(cur===k?' selected':'')+'>'+LAYERS[k].n+'</option>').join('')+'</select></div>'}).join('')+'</div>':'')+
+   (it.g==='exp'?'<div class="field">Тип у подкатегорий<div id="i-sl" style="display:flex;flex-direction:column;gap:6px"></div></div>'+(id?'<details class="arch" id="i-tagsd"><summary><svg class="arr" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg><span class="grow">Старые метки в истории</span><b class="num" id="i-tagsn"></b></summary><div class="sub" style="font-weight:400;margin:2px 0 6px">Метки из CoinKeeper и прошлых записей. Перенеси их в подкатегорию — все операции с этой меткой поменяются.</div><div id="i-tags" class="archbody"></div></details>':''):'')+
    (it.g==='acc'?'<div class="field">Напоминать о переоценке<div class="chips">'+[[0,'Нет'],[7,'Раз в неделю'],[14,'Раз в 2 недели'],[30,'Раз в месяц']].map(p=>'<button class="chip" data-rv="'+p[0]+'" aria-pressed="'+((it.reval?(it.revalDays||30):0)===p[0])+'">'+p[1]+'</button>').join('')+'</div></div>':'')+
    '<button class="btn primary" id="i-save">Сохранить</button>'+(id?'<button class="btn" id="i-hide">'+(it.hidden?'Показывать':'Скрыть с экрана')+'</button>':'');
   let icon=it.icon,layer=it.layer||'base',rv=it.reval?(it.revalDays||30):0;
   $('panel').querySelectorAll('[data-rv]').forEach(b=>b.onclick=()=>{rv=+b.dataset.rv;$('panel').querySelectorAll('[data-rv]').forEach(x=>x.setAttribute('aria-pressed',x===b))});
   $('sheet').hidden=false;$('i-close').onclick=closeSheet;
+  // типы подкатегорий: список строится из поля «Подкатегории» на лету; если их нет — подсказываем метки из истории
+  const slv=Object.assign({},it.subLayer||{}),tmap={};
+  const drawSL=()=>{const box=$('i-sl');if(!box)return;
+    box.querySelectorAll('[data-sl]').forEach(x=>{if(x.value)slv[x.dataset.sl]=x.value;else delete slv[x.dataset.sl]});
+    const subs=$('i-subs').value.split(',').map(x=>x.trim()).filter(Boolean),low=subs.map(x=>x.toLowerCase());
+    const tg=id?frequentTags(id).filter(t=>t&&!low.includes(t.trim().toLowerCase())).slice(0,6):[];
+    box.innerHTML=(subs.length?subs.map(sb=>{const k=sb.toLowerCase(),cur=slv[k]||'';return '<div class="row" style="font-size:14px;color:var(--fg)"><span class="grow">'+esc(sb)+'</span><select data-sl="'+esc(k)+'" aria-label="Тип для '+esc(sb)+'" style="border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 8px;min-height:36px;color:var(--fg)"><option value=""'+(cur?'':' selected')+'>как у категории</option>'+Object.keys(LAYERS).map(l=>'<option value="'+l+'"'+(cur===l?' selected':'')+'>'+LAYERS[l].n+'</option>').join('')+'</select></div>'}).join(''):'<div class="sub" style="font-weight:400">Сначала впиши подкатегории в поле выше'+(tg.length?' или добавь из меток:':'.')+'</div>')+
+      (tg.length?(subs.length?'<div class="sub" style="font-weight:400">Добавить из меток:</div>':'')+'<div class="chips">'+tg.map(t=>'<button class="chip" data-addsub="'+esc(t)+'">+ '+esc(t)+'</button>').join('')+'</div>':'');
+    box.querySelectorAll('[data-addsub]').forEach(b=>b.onclick=()=>{const f=$('i-subs');f.value=(f.value.trim()?f.value.replace(/[,\s]*$/,'')+', ':'')+b.dataset.addsub;drawSL()});
+    const tb=$('i-tags');if(!tb)return;
+    tb.querySelectorAll('[data-tmap]').forEach(x=>{tmap[x.dataset.tmap]=x.value});
+    const cnt={},disp={};for(const o of S.ops){if(o.to!==id||!o.tag)continue;const k=o.tag.trim().toLowerCase();if(!k||low.includes(k))continue;cnt[k]=(cnt[k]||0)+1;disp[k]=disp[k]||o.tag.trim()}
+    const keys=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]);$('i-tagsn').textContent=keys.length||'';
+    tb.innerHTML=keys.length?keys.map(k=>{const v=tmap[k]||'';return '<div class="row" style="font-size:14px;color:var(--fg)"><span class="grow" style="min-width:0;overflow:hidden;text-overflow:ellipsis">'+esc(disp[k])+' <span class="sub">· '+cnt[k]+'</span></span><select data-tmap="'+esc(k)+'" aria-label="Куда перенести '+esc(disp[k])+'" style="border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 8px;min-height:36px;max-width:55%;color:var(--fg)"><option value="">оставить</option>'+subs.map(sb=>'<option value="'+esc(sb)+'"'+(v===sb?' selected':'')+'>→ '+esc(sb)+'</option>').join('')+'<option value="__del"'+(v==='__del'?' selected':'')+'>убрать метку</option></select></div>'}).join(''):'<div class="sub" style="font-weight:400">Все метки уже совпадают с подкатегориями.</div>'};
+  if($('i-subs')){drawSL();$('i-subs').addEventListener('input',drawSL)}
   $('panel').querySelectorAll('[data-icon]').forEach(b=>b.onclick=()=>{icon=b.dataset.icon;$('panel').querySelectorAll('[data-icon]').forEach(x=>x.setAttribute('aria-pressed',x===b))});
   $('panel').querySelectorAll('[data-layer]').forEach(b=>b.onclick=()=>{layer=b.dataset.layer;$('panel').querySelectorAll('[data-layer]').forEach(x=>x.setAttribute('aria-pressed',x===b))});
   $('i-save').onclick=()=>{const n=$('i-name').value.trim();if(!n){toast('Введи название');return}
     const rvf=it.g==='acc'?{reval:rv>0,revalDays:rv||undefined}:{};
     const subs=$('i-subs')?$('i-subs').value.split(',').map(x=>x.trim()).filter(Boolean):undefined;
+    let moved=0;if(id&&it.g==='exp'){$('panel').querySelectorAll('[data-tmap]').forEach(x=>{if(x.value)tmap[x.dataset.tmap]=x.value;else delete tmap[x.dataset.tmap]});
+      for(const o of S.ops){if(o.to!==id||!o.tag)continue;const t=tmap[o.tag.trim().toLowerCase()];if(!t||(subs||[]).every(sb=>sb!==t)&&t!=='__del')continue;if(t==='__del')delete o.tag;else o.tag=t;moved++}}
     const subLayer={};$('panel').querySelectorAll('[data-sl]').forEach(x=>{if(x.value&&subs&&subs.some(sb=>sb.toLowerCase()===x.dataset.sl))subLayer[x.dataset.sl]=x.value});
     if(id){it.name=n;it.icon=icon;if(it.g==='exp'){it.layer=layer;it.subs=subs;it.subLayer=subLayer}Object.assign(it,rvf)}else S.items.push(Object.assign({id:uid('i'),g:it.g,name:n,icon,start:+($('i-start')&&$('i-start').value)||0,layer:it.g==='exp'?layer:undefined,subs:it.g==='exp'?subs:undefined},rvf));
-    persist();closeSheet();render()};
+    persist();closeSheet();if(moved)toast('Перенесено операций: '+moved);render()};
   if(id)$('i-hide').onclick=()=>{it.hidden=!it.hidden;persist();closeSheet();render()};
 }
 function exportJson(){
