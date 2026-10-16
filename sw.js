@@ -1,5 +1,5 @@
 // Офлайн-кэш. При обновлении сайта поднять версию в CACHE.
-const CACHE = "monetki-v22";
+const CACHE = "monetki-v23";
 const FILES = ["./", "index.html", "manifest.json", "icon-180.png", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", e => {
@@ -18,9 +18,16 @@ self.addEventListener("fetch", e => {
     return;
   }
   if (url.origin !== location.origin) return;
-  // Свои файлы: сначала сеть (чтобы подхватывать обновления), без сети — кэш
-  e.respondWith(fetch(req).then(r => {
+  // Свои файлы: пробуем сеть, но ждём не дольше 1,5 с — дальше открываем из кэша,
+  // а свежая версия докачивается в фоне и будет при следующем запуске
+  const net = fetch(req).then(r => {
     if (r.ok) { const copy = r.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
     return r;
-  }).catch(() => caches.match(req).then(hit => hit || caches.match("index.html"))));
+  });
+  e.waitUntil(net.catch(() => {}));
+  e.respondWith(caches.match(req).then(hit => {
+    if (!hit) return net.catch(() => caches.match("index.html"));
+    const late = new Promise(res => setTimeout(() => res(hit), 1500));
+    return Promise.race([net.catch(() => hit), late]);
+  }));
 });
