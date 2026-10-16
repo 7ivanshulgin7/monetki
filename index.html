@@ -126,6 +126,14 @@ details.card summary .grow{flex:1}
 details.card .arr{color:var(--muted);transition:transform .2s;flex:none}
 details.card[open] .arr{transform:rotate(180deg)}
 .secbody{display:flex;flex-direction:column;gap:8px;padding-top:12px}
+.pay{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:10px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
+.pay:first-of-type{border-top:0}
+.pday{text-align:center;background:var(--sunk);border-radius:10px;padding:8px 0;font-size:17px;font-weight:700}
+.pinfo{border:0;background:transparent;text-align:left;padding:4px 0;display:flex;flex-direction:column;gap:2px;min-width:0}
+.pinfo b{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pinfo .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pright{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.pright .btn.small{min-height:34px;padding:4px 12px}
 .notice{background:var(--accent-soft);border-radius:14px;padding:14px;font-size:14px;display:flex;flex-direction:column;gap:10px}
 </style>
 </head>
@@ -135,13 +143,12 @@ details.card[open] .arr{transform:rotate(180deg)}
     <div class="hdr">
       <div class="hdr-row">
         <div class="totals num">
-          <div><span>Баланс</span><b id="t-bal">0 ₽</b></div>
+          <div><span>Доходы</span><b id="t-inc">0 ₽</b></div>
           <div><span>Расходы</span><b id="t-exp">0 ₽</b></div>
           <div><span>В планах</span><b id="t-plan">0 ₽</b></div>
         </div>
         <button class="chev" id="toggle-in" aria-label="Показать доходы"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
       </div>
-      <div class="month"><button id="m-prev" aria-label="Предыдущий месяц">‹</button><b id="m-label"></b><button id="m-next" aria-label="Следующий месяц">›</button></div>
     </div>
     <div class="scroll" id="coins-scroll">
       <div id="first-run" class="page" hidden>
@@ -242,7 +249,7 @@ function regDone(r,month){return S.ops.some(o=>o.reg===r.id&&ym(o.d)===month)}
 function regActive(r,month){return !r.until||month<=r.until}
 
 /* ---------- состояние UI ---------- */
-let tab='coins', month=ym(today()), showIn=false, statSel=11;
+let tab='coins', month=ym(today()), showIn=false, statMonth=ym(today());
 
 function render(){
   document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-current',b.dataset.tab===tab?'page':'false'));
@@ -258,7 +265,7 @@ function monthLabel(m){const [y,mo]=m.split('-');return MON[+mo-1][0].toUpperCas
 function renderCoins(){
   const first=!S;$('first-run').hidden=!first;$('bands').hidden=first;
   if(first){['g-in','g-acc','g-exp'].forEach(id=>$(id).innerHTML='');return}
-  const mf=flows(month),all=flows(null);
+  const cm=ym(today()),mf=flows(cm),all=flows(null);  // главный экран всегда показывает текущий месяц
   const vis=g=>S.items.filter(x=>x.g===g&&!x.hidden);
   const coin=it=>'<button class="coin '+it.g+'" data-id="'+it.id+'"><span class="nm">'+esc(it.name)+'</span><span class="c">'+svg(ICONS[it.icon]||ICONS.star)+'</span><span class="s num">'+rub(itemValue(it,mf,all))+'</span></button>';
   // новые монеты добавляются только через «Ещё»
@@ -268,11 +275,9 @@ function renderCoins(){
   $('band-in').hidden=!showIn;
   $('toggle-in').querySelector('svg').style.transform=showIn?'rotate(180deg)':'none';
   $('toggle-in').setAttribute('aria-label',showIn?'Скрыть доходы':'Показать доходы');
-  $('t-bal').textContent=rub(vis('acc').reduce((s,it)=>s+itemValue(it,mf,all),0));
-  $('t-exp').textContent=rub(monthSpend(month));
-  $('t-plan').textContent=rub(S.regular.filter(r=>regActive(r,month)&&!regDone(r,month)).reduce((s,r)=>s+r.sum,0));
-  $('m-label').textContent=monthLabel(month);
-  $('m-next').disabled=month>=ym(today());
+  $('t-inc').textContent=rub(monthIncome(cm));
+  $('t-exp').textContent=rub(monthSpend(cm));
+  $('t-plan').textContent=rub(S.regular.filter(r=>regActive(r,cm)&&!regDone(r,cm)).reduce((s,r)=>s+r.sum,0));
   const due=revalDue();
   $('reval-banner').hidden=!due.length;
   $('reval-banner').innerHTML=due.map(r=>'<div class="notice" style="flex-direction:row;align-items:center;padding:10px 12px;margin-bottom:6px"><span class="grow" style="flex:1;font-size:14px">Пора переоценить <b>'+esc(r.it.name)+'</b><br><span class="sub">'+(r.days==null?'ещё не переоценивал':'последний раз '+r.days+' дн. назад')+'</span></span><button class="btn small primary" data-reval="'+r.it.id+'">Переоценить</button></div>').join('');
@@ -459,9 +464,10 @@ function renderPlan(){
   if(!act.length)h+='<div class="empty">Регулярных платежей нет. Добавь кредит, подписки, связь — приложение напомнит в нужный день.</div>';
   for(const r of act){
     const done=regDone(r,m),late=!done&&day>r.day;
-    h+='<div class="row"><div style="width:44px;flex:none;text-align:center;background:var(--sunk);border-radius:10px;padding:6px 0"><b class="num" style="font-size:17px">'+r.day+'</b></div>'+
-      '<div class="grow"><b>'+esc(r.name)+'</b><div class="sub" style="color:'+(late?'var(--warn)':done?'var(--good)':'var(--muted)')+'">'+(done?'записано':late?'не записано — день прошёл':'ожидается')+(r.until?' · до '+MON_S[+r.until.slice(5)-1].toLowerCase()+' '+r.until.slice(2,4):'')+'</div></div>'+
-      '<b class="num">'+rub(r.sum)+'</b>'+(done?'':'<button class="btn small primary" data-pay="'+r.id+'">Записать</button>')+'<button class="btn small" data-edit="'+r.id+'" aria-label="Изменить '+esc(r.name)+'">✎</button></div>';
+    // строка платежа: день | название и статус (нажатие — изменить) | сумма и «Записать»
+    h+='<div class="pay"><div class="pday num">'+r.day+'</div>'+
+      '<button class="pinfo" data-edit="'+r.id+'" aria-label="Изменить '+esc(r.name)+'"><b>'+esc(r.name)+'</b><span class="sub" style="color:'+(late?'var(--warn)':done?'var(--good)':'var(--muted)')+'">'+(done?'записано':late?'день прошёл':'ожидается')+(r.until?' · до '+MON_S[+r.until.slice(5)-1].toLowerCase()+' '+r.until.slice(2,4):'')+'</span></button>'+
+      '<div class="pright"><b class="num">'+rub(r.sum)+'</b>'+(done?'<span class="sub" style="color:var(--good)">✓</span>':'<button class="btn small primary" data-pay="'+r.id+'">Записать</button>')+'</div></div>';
   }
   h+='<button class="btn" id="reg-add">Добавить регулярный платёж</button></div>';
   const left=act.filter(r=>!regDone(r,m)).reduce((s,r)=>s+r.sum,0);
@@ -494,16 +500,27 @@ function openReg(id){
 function renderStats(){
   let h='<h1>Аналитика</h1>';
   if(!S||!S.ops.length){$('stats').innerHTML=h+'<div class="empty">Появится, когда будут операции.</div>';return}
-  const m=ym(today()),day=+today().slice(8);
+  const cur=ym(today()),m=statMonth,isCur=m===cur,day=isCur?+today().slice(8):31;
+  // деньги сейчас — всегда на сегодня
+  const all=flows(null),accs=S.items.filter(x=>x.g==='acc'&&!x.hidden).map(it=>({it,v:itemValue(it,{},all)}));
+  const live=accs.filter(a=>!a.it.reval).reduce((s,a)=>s+a.v,0),sav=accs.filter(a=>a.it.reval).reduce((s,a)=>s+a.v,0);
+  h+='<div class="card"><div class="row"><h2 class="grow">Деньги сейчас</h2><b class="num big" style="font-size:20px">'+rub(live+sav)+'</b></div>'+
+     '<div class="two"><div><div class="sub">Живые</div><b class="num">'+rub(live)+'</b></div><div><div class="sub">Накопления</div><b class="num">'+rub(sav)+'</b></div></div>'+
+     accs.map(a=>'<div class="row" style="font-size:14px"><span class="grow sub" style="font-size:14px">'+esc(a.it.name)+'</span><span class="num">'+rub(a.v)+'</span></div>').join('')+'</div>';
+  // выбор месяца
+  h+='<div class="month" style="padding:0"><button id="s-prev" aria-label="Предыдущий месяц">‹</button><b>'+monthLabel(m)+'</b><button id="s-next" aria-label="Следующий месяц"'+(isCur?' disabled':'')+'>›</button></div>';
   const prev=[1,2,3,4,5,6].map(k=>addMonth(m,-k)).filter(x=>S.ops.some(o=>ym(o.d)===x));
-  const now=monthSpend(m),usual=prev.length?prev.reduce((s,x)=>s+monthSpend(x,day),0)/prev.length:0;
-  h+='<div class="card"><div class="sub">'+monthLabel(m)+', 1–'+day+' число</div><div class="two"><div><div class="sub">Потрачено</div><div class="big num">'+rub(now)+'</div></div><div><div class="sub">Обычно к '+day+'-му</div><div class="big num" style="color:var(--muted)">'+rub(usual)+'</div></div></div>'+
-     '<div class="track"><i style="width:'+Math.min(100,usual?now/usual*100:0)+'%;background:'+(now>usual?'var(--bad)':'var(--accent)')+'"></i></div><div class="sub">Среднее за '+prev.length+' предыдущих мес. к этому же числу</div></div>';
+  const now=monthSpend(m),usual=prev.length?prev.reduce((s,x)=>s+monthSpend(x,day),0)/prev.length:0,inc=monthIncome(m);
+  h+='<div class="card"><div class="sub">'+(isCur?'1–'+day+' число':'весь месяц')+'</div><div class="two"><div><div class="sub">Потрачено</div><div class="big num">'+rub(now)+'</div></div><div><div class="sub">'+(isCur?'Обычно к '+day+'-му':'Обычно за месяц')+'</div><div class="big num" style="color:var(--muted)">'+rub(usual)+'</div></div></div>'+
+     '<div class="track"><i style="width:'+Math.min(100,usual?now/usual*100:0)+'%;background:'+(now>usual?'var(--bad)':'var(--accent)')+'"></i></div>'+
+     '<div class="row" style="font-size:14px"><span class="grow sub" style="font-size:14px">Доходы</span><b class="num" style="color:var(--good)">+'+fmt(inc)+'</b></div>'+
+     '<div class="row" style="font-size:14px"><span class="grow sub" style="font-size:14px">Итог месяца</span><b class="num" style="color:'+(inc-now>=0?'var(--good)':'var(--bad)')+'">'+(inc-now>=0?'+':'−')+rub(Math.abs(inc-now))+'</b></div>'+
+     '<div class="sub">Сравнение со средним за '+prev.length+' предыдущих мес.'+(isCur?' к этому же числу':'')+'</div></div>';
   // 12 месяцев
-  const ms=[];for(let k=11;k>=0;k--)ms.push(addMonth(m,-k));
+  const ms=[];for(let k=11;k>=0;k--)ms.push(addMonth(cur,-k));
   const data=ms.map(x=>({m:x,i:monthIncome(x),e:monthSpend(x)}));
   const max=Math.max(1,...data.map(x=>Math.max(x.i,x.e)));
-  const s=data[statSel],net=s.i-s.e;
+  const statSel=Math.max(0,ms.indexOf(m)),s=data[statSel],net=s.i-s.e;
   h+='<div class="card"><div class="row"><h2 class="grow">12 месяцев</h2><span class="sub"><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--bar-in)"></i> доход &nbsp;<i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--bar-exp)"></i> расход</span></div>'+
      '<div class="row num" style="background:var(--sunk);border-radius:10px;padding:8px 10px;font-size:13px"><b class="grow">'+monthLabel(s.m)+'</b><span>+'+fmt(s.i)+' · −'+fmt(s.e)+' · <b style="color:'+(net>=0?'var(--good)':'var(--bad)')+'">'+(net>=0?'+':'−')+fmt(Math.abs(net))+'</b></span></div>'+
      '<div class="bars">'+data.map((x,i)=>'<button data-bar="'+i+'" aria-pressed="'+(i===statSel)+'" aria-label="'+monthLabel(x.m)+'"><i style="height:'+Math.max(2,x.i/max*136)+'px;background:var(--bar-in)"></i><i style="height:'+Math.max(2,x.e/max*136)+'px;background:var(--bar-exp)"></i></button>').join('')+'</div>'+
@@ -513,7 +530,7 @@ function renderStats(){
   const rows=cats.map(c=>{const nowv=catSpend(c.id,m),avg=full.length?full.reduce((s,x)=>s+catSpend(c.id,x),0)/full.length:0;return {c,nowv,avg}}).filter(r=>r.nowv||r.avg).sort((a,b)=>b.avg-a.avg);
   const cmax=Math.max(1,...rows.map(r=>Math.max(r.avg,r.nowv)));
   const sub=r=>tagRows(r.c.id,m,full,r.avg).map(t=>'<div data-dyn="'+r.c.id+'" data-tag="'+esc(t.key)+'" role="button" tabindex="0" style="padding-left:14px;margin-top:6px;cursor:pointer"><div class="row" style="font-size:13px"><span class="grow sub" style="font-size:13px">в т. ч. '+esc(t.name)+' <span class="num">· '+Math.round(t.avg/(r.avg||1)*100)+'%</span></span><span class="num"><span class="sub">'+fmt(t.nowv)+' · </span>'+rub(t.avg)+'</span></div><div class="track" style="margin-top:3px;height:5px"><i style="width:'+(t.avg/cmax*100)+'%;background:var(--sunk);filter:brightness(.85)"></i><i style="width:'+(t.nowv/cmax*100)+'%;background:var(--bar-exp)"></i></div></div>').join('');
-  h+='<div class="card"><div class="row"><h2 class="grow">Категории</h2><span class="sub">сейчас · средний месяц</span></div>'+rows.map(r=>'<div><div data-dyn="'+r.c.id+'" role="button" tabindex="0" style="cursor:pointer"><div class="row" style="font-size:14px"><span class="grow">'+esc(r.c.name)+' <span class="sub">›</span></span><span class="num"><span class="sub">'+fmt(r.nowv)+' · </span><b>'+rub(r.avg)+'</b></span></div><div class="track" style="margin-top:4px"><i style="width:'+(r.avg/cmax*100)+'%;background:var(--sunk);filter:brightness(.85)"></i><i style="width:'+(r.nowv/cmax*100)+'%;background:var(--bar-in)"></i></div></div>'+sub(r)+'</div>').join('')+
+  h+='<div class="card"><div class="row"><h2 class="grow">Категории</h2><span class="sub">'+(isCur?'сейчас':MON_S[+m.slice(5)-1].toLowerCase())+' · средний месяц</span></div>'+rows.map(r=>'<div><div data-dyn="'+r.c.id+'" role="button" tabindex="0" style="cursor:pointer"><div class="row" style="font-size:14px"><span class="grow">'+esc(r.c.name)+' <span class="sub">›</span></span><span class="num"><span class="sub">'+fmt(r.nowv)+' · </span><b>'+rub(r.avg)+'</b></span></div><div class="track" style="margin-top:4px"><i style="width:'+(r.avg/cmax*100)+'%;background:var(--sunk);filter:brightness(.85)"></i><i style="width:'+(r.nowv/cmax*100)+'%;background:var(--bar-in)"></i></div></div>'+sub(r)+'</div>').join('')+
      '<div class="sub">Нажми на категорию или метку, чтобы увидеть динамику по месяцам.</div></div>';
   const lay={};for(const r of rows){const l=r.c.layer||'base';lay[l]=(lay[l]||0)+r.avg}
   const lsum=Object.values(lay).reduce((a,b)=>a+b,0)||1;
@@ -521,7 +538,9 @@ function renderStats(){
      Object.keys(LAYERS).filter(k=>lay[k]).map(k=>'<div class="row" style="font-size:14px"><i style="width:10px;height:10px;border-radius:3px;background:var('+LAYERS[k].c+')"></i><span class="grow">'+LAYERS[k].n+'</span><b class="num">'+rub(lay[k])+'</b></div>').join('')+
      '<div class="sub">Тип у каждой категории меняется в «Ещё → Категории».</div></div>';
   $('stats').innerHTML=h;
-  $('stats').querySelectorAll('[data-bar]').forEach(b=>b.onclick=()=>{statSel=+b.dataset.bar;renderStats()});
+  $('stats').querySelectorAll('[data-bar]').forEach(b=>b.onclick=()=>{statMonth=ms[+b.dataset.bar];renderStats()});
+  $('s-prev').onclick=()=>{statMonth=addMonth(statMonth,-1);renderStats()};
+  $('s-next').onclick=()=>{if(statMonth<cur){statMonth=addMonth(statMonth,1);renderStats()}};
   $('stats').querySelectorAll('[data-dyn]').forEach(b=>{const go=e=>{e.stopPropagation();openDyn(b.dataset.dyn,b.dataset.tag||'')};b.onclick=go;b.onkeydown=e=>{if(e.key==='Enter'||e.key===' ')go(e)}});
 }
 // Метки внутри категории: регистр не важен («Алкоголь» = «алкоголь»). Показываем те, что дают ≥15% категории, не больше трёх.
@@ -695,8 +714,6 @@ $('fr-empty').onclick=()=>{S=blank();const w=uid('i'),c=uid('i');S.items.push({i
 function toast(s){const t=$('toast');t.textContent=s;t.hidden=false;clearTimeout(toast.h);toast.h=setTimeout(()=>t.hidden=true,2400)}
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;closeSheet();render()});
 $('toggle-in').onclick=()=>{showIn=!showIn;render()};
-$('m-prev').onclick=()=>{month=addMonth(month,-1);render()};
-$('m-next').onclick=()=>{month=addMonth(month,1);render()};
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('sheet').hidden)closeSheet()});
 render();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
