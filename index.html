@@ -55,6 +55,11 @@ button{cursor:pointer}
 .band{padding:12px 6px 10px;border-bottom:1px solid var(--line)}
 .band.in{background:var(--surface)} .band.acc{background:var(--acc-band)}
 .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));row-gap:14px}
+/* доходы и счета — одна строка с прокруткой вбок; пятая монета выглядывает, подсказывая, что дальше есть ещё */
+.hscroll{display:flex;overflow-x:auto;scroll-snap-type:x proximity;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:0 2px}
+.hscroll::-webkit-scrollbar{display:none}
+.hscroll .coin{flex:0 0 23.5%;scroll-snap-align:start;touch-action:pan-x}
+.hscroll.few .coin{flex-basis:25%}
 .coin{display:flex;flex-direction:column;align-items:center;gap:5px;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;border:0;background:transparent;padding:0}
 .coin .nm{font-size:12px;color:var(--muted);max-width:84px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .coin .c{width:60px;height:60px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:transform .12s,box-shadow .12s}
@@ -148,8 +153,8 @@ details.card[open] .arr{transform:rotate(180deg)}
       </div>
       <div id="reval-banner" style="padding:10px 12px 0" hidden></div>
       <div id="bands">
-      <div class="band in" id="band-in" hidden><div class="grid" id="g-in"></div></div>
-      <div class="band acc"><div class="grid" id="g-acc"></div></div>
+      <div class="band in" id="band-in" hidden><div class="hscroll" id="g-in"></div></div>
+      <div class="band acc"><div class="hscroll" id="g-acc"></div></div>
       <div class="band"><div class="grid" id="g-exp"></div></div>
       <div class="hint">Перетащи монету: доход → счёт → расход. Нажатие — быстрый ввод.</div>
       </div>
@@ -256,10 +261,10 @@ function renderCoins(){
   const mf=flows(month),all=flows(null);
   const vis=g=>S.items.filter(x=>x.g===g&&!x.hidden);
   const coin=it=>'<button class="coin '+it.g+'" data-id="'+it.id+'"><span class="nm">'+esc(it.name)+'</span><span class="c">'+svg(ICONS[it.icon]||ICONS.star)+'</span><span class="s num">'+rub(itemValue(it,mf,all))+'</span></button>';
-  const add=g=>'<button class="coin add" data-add="'+g+'"><span class="nm">&nbsp;</span><span class="c">'+svg(ICONS.plus,24,'var(--muted)')+'</span><span class="s">&nbsp;</span></button>';
-  $('g-in').innerHTML=vis('in').map(coin).join('')+add('in');
-  $('g-acc').innerHTML=vis('acc').map(coin).join('')+add('acc');
-  $('g-exp').innerHTML=vis('exp').map(coin).join('')+add('exp');
+  // новые монеты добавляются только через «Ещё»
+  $('g-in').innerHTML=vis('in').map(coin).join('');$('g-in').classList.toggle('few',vis('in').length<=4);
+  $('g-acc').innerHTML=vis('acc').map(coin).join('');$('g-acc').classList.toggle('few',vis('acc').length<=4);
+  $('g-exp').innerHTML=vis('exp').map(coin).join('');
   $('band-in').hidden=!showIn;
   $('toggle-in').querySelector('svg').style.transform=showIn?'rotate(180deg)':'none';
   $('toggle-in').setAttribute('aria-label',showIn?'Скрыть доходы':'Показать доходы');
@@ -282,6 +287,36 @@ function revalDue(){
   return S.items.filter(x=>x.g==='acc'&&!x.hidden&&x.reval).map(it=>{const l=lastReval(it.id);return {it,days:l?daysBetween(l,t):null}}).filter(r=>r.days==null||r.days>=(r.it.revalDays||30));
 }
 function gainItem(){let it=S.items.find(x=>x.g==='in'&&x.name==='Активы');if(!it){it={id:uid('i'),g:'in',name:'Переоценка',icon:'trend',hidden:true};S.items.push(it)}return it}
+// Сверка остатка для обычных счетов (кошелёк, карта): разница уходит в выбранную категорию/доход или просто правит остаток
+function openCheck(id){
+  const it=byId(id),cur=itemValue(it,{},flows(null));let v='',target=null;
+  const draw=()=>{
+    const nv=v===''?null:+v,diff=nv==null?0:Math.round(nv-cur);
+    const opts=diff<0?S.items.filter(x=>x.g==='exp'&&!x.hidden):diff>0?S.items.filter(x=>x.g==='in'&&!x.hidden):[];
+    if(target&&target!=='skip'&&!opts.some(o=>o.id===target))target=null;
+    $('panel').innerHTML='<div class="row"><b class="grow">Сверить остаток: '+esc(it.name)+'</b><button class="x" id="c-close" aria-label="Закрыть">✕</button></div>'+
+     '<div class="sub">В приложении: <b class="num">'+rub(cur)+'</b>. Сколько на самом деле?</div>'+
+     '<div class="amount num">'+(v===''?'—':Number(v).toLocaleString('ru-RU')+' ₽')+'</div>'+
+     (nv==null||diff===0?'<div class="sub" style="text-align:center">'+(nv==null?'&nbsp;':'совпадает')+'</div>':
+      '<div class="sub num" style="text-align:center;font-size:14px;color:'+(diff>0?'var(--good)':'var(--bad)')+'">'+(diff>0?'больше на '+rub(diff)+' — откуда?':'меньше на '+rub(-diff)+' — на что ушло?')+'</div>'+
+      '<div class="chips">'+opts.map(o=>'<button class="chip" data-t="'+o.id+'" aria-pressed="'+(target===o.id)+'">'+esc(o.name)+'</button>').join('')+
+      '<button class="chip" data-t="skip" aria-pressed="'+(target==='skip')+'">Не учитывать</button></div>'+
+      (target==='skip'?'<div class="sub">Остаток поправится, в доходы и расходы разница не попадёт.</div>':''))+
+     '<div class="keys">'+['1','2','3','4','5','6','7','8','9','00','0','⌫'].map(k=>'<button data-k="'+k+'">'+k+'</button>').join('')+'</div>'+
+     '<button class="btn primary" id="c-save"'+(nv==null||(diff!==0&&!target)?' disabled':'')+'>Сохранить</button>';
+    $('c-close').onclick=closeSheet;
+    $('panel').querySelectorAll('[data-k]').forEach(k=>k.onclick=()=>{const x=k.dataset.k;v=x==='⌫'?v.slice(0,-1):(v+x).replace(/^0+(?=\d)/,'').slice(0,10);draw()});
+    $('panel').querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{target=b.dataset.t;draw()});
+    $('c-save').onclick=()=>{
+      if(diff!==0){
+        if(target==='skip')it.start=(it.start||0)+diff;
+        else S.ops.push(diff<0?{id:uid('o'),d:today(),from:it.id,to:target,sum:-diff,tag:'сверка'}:{id:uid('o'),d:today(),from:target,to:it.id,sum:diff,tag:'сверка'});
+        S.ops.sort((x,y)=>x.d<y.d?-1:x.d>y.d?1:0);
+      }
+      persist();closeSheet();toast(it.name+': '+rub(nv));render()};
+  };
+  draw();$('sheet').hidden=false;
+}
 function openReval(id){
   const it=byId(id),cur=itemValue(it,{},flows(null));let v='';
   const draw=()=>{const nv=v===''?null:+v,diff=nv==null?0:nv-cur;
@@ -354,7 +389,7 @@ function renderEntry(){
   const fromG=b&&b.g==='acc'?['in','acc']:['acc'],toG=a&&a.g==='in'?['acc']:['acc','exp'];
   const tags=b&&b.g==='exp'?frequentTags(b.id):[];
   const y=new Date();y.setDate(y.getDate()-1);const yd=y.toISOString().slice(0,10);
-  $('panel').innerHTML=(a&&a.g==='acc'&&a.reval&&!b?'<button class="btn" id="e-reval">Переоценить '+esc(a.name)+'</button>':'')+
+  $('panel').innerHTML=(a&&a.g==='acc'&&!b?'<button class="btn" id="e-reval">'+(a.reval?'Переоценить ':'Сверить остаток: ')+esc(a.name)+'</button>':'')+
    '<div class="row"><div class="pair"><span style="background:'+(a?colorVar[a.g]:'var(--muted)')+'">'+esc(a?a.name:'Откуда?')+'</span>→<span style="background:'+(b?colorVar[b.g]:'var(--muted)')+'">'+esc(b?b.name:'Куда?')+'</span></div><button class="x" id="e-close" aria-label="Закрыть">✕</button></div>'+
    '<div class="two"><label class="field">Откуда<select id="e-from">'+(a?'':'<option value="">—</option>')+opts(fromG,E.from)+'</select></label><label class="field">Куда<select id="e-to">'+(b?'':'<option value="">—</option>')+opts(toG,E.to)+'</select></label></div>'+
    '<div class="amount num" id="e-amt">'+(E.amount?Number(E.amount).toLocaleString('ru-RU'):'0')+' ₽</div>'+
@@ -365,7 +400,7 @@ function renderEntry(){
    '<div class="keys">'+['1','2','3','4','5','6','7','8','9','00','0','⌫'].map(k=>'<button data-k="'+k+'">'+k+'</button>').join('')+'</div>'+
    '<button class="btn primary" id="e-save">Записать</button>';
   $('e-close').onclick=closeSheet;
-  if($('e-reval'))$('e-reval').onclick=()=>openReval(a.id);
+  if($('e-reval'))$('e-reval').onclick=()=>a.reval?openReval(a.id):openCheck(a.id);
   $('e-from').onchange=e=>{E.from=e.target.value;renderEntry()};
   $('e-to').onchange=e=>{E.to=e.target.value;E.tag='';renderEntry()};
   $('panel').querySelectorAll('[data-k]').forEach(k=>k.onclick=()=>{const v=k.dataset.k;E.amount=v==='⌫'?E.amount.slice(0,-1):(E.amount+v).replace(/^0+/,'').slice(0,9);$('e-amt').textContent=(E.amount?Number(E.amount).toLocaleString('ru-RU'):'0')+' ₽'});
