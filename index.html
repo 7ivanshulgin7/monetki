@@ -124,7 +124,11 @@ details.card summary{list-style:none;display:flex;align-items:center;gap:10px;cu
 details.card summary::-webkit-details-marker{display:none}
 details.card summary .grow{flex:1}
 details.card .arr{color:var(--muted);transition:transform .2s;flex:none}
-details.card[open] .arr{transform:rotate(180deg)}
+details.card[open]>summary .arr,details.arch[open]>summary .arr{transform:rotate(180deg)}
+details.arch>summary{list-style:none;display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 2px;color:var(--muted);font-size:14px}
+details.arch>summary::-webkit-details-marker{display:none}
+details.arch>summary .arr{transition:transform .2s;flex:none}
+details.arch .archbody{display:flex;flex-direction:column;gap:8px;padding-top:6px}
 .secbody{display:flex;flex-direction:column;gap:8px;padding-top:12px}
 .pay{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:10px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
 .pay:first-of-type{border-top:0}
@@ -645,7 +649,11 @@ function renderMore(){
     for(const [g,t] of [['in','Доходы'],['acc','Счета'],['exp','Категории расходов']]){
       const list=S.items.filter(x=>x.g===g&&(!x.hidden||S.ops.some(o=>o.from===x.id||o.to===x.id)));
       const vis=list.filter(x=>!x.hidden).length;
-      h+=sec(g,t,vis+' на экране'+(list.length>vis?', '+(list.length-vis)+' скрыто':''),list.map(x=>'<button class="op" style="background:var(--sunk)" data-item="'+x.id+'"><span class="grow">'+esc(x.name)+(x.hidden?' <span class="sub">· скрыт</span>':'')+'</span>'+(g==='exp'?'<span class="sub">'+LAYERS[x.layer||'base'].n+'</span>':g==='acc'&&x.reval?'<span class="sub">переоценка</span>':'')+'</button>').join('')+'<button class="btn small" data-new="'+g+'">Добавить</button>');
+      // скрытые не мешают: уходят в сворачиваемый «Архив» с числом
+      const row=x=>'<button class="op" style="background:var(--sunk)" data-item="'+x.id+'"><span class="grow">'+esc(x.name)+'</span>'+(g==='exp'?'<span class="sub">'+LAYERS[x.layer||'base'].n+'</span>':g==='acc'&&x.reval?'<span class="sub">переоценка</span>':'')+'</button>';
+      const arch=list.filter(x=>x.hidden);
+      h+=sec(g,t,vis+' на экране'+(arch.length?' · архив '+arch.length:''),list.filter(x=>!x.hidden).map(row).join('')+'<button class="btn small" data-new="'+g+'">Добавить</button>'+
+        (arch.length?'<details class="arch"'+(openSecs.has('arch-'+g)?' open':'')+' data-sec="arch-'+g+'"><summary><svg class="arr" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg><span class="grow">Архив</span><b class="num">'+arch.length+'</b></summary><div class="archbody">'+arch.map(row).join('')+'</div></details>':''));
     }
   }
   h+=sec('data','Данные',S?'операций: '+fmt(S.ops.length):'',
