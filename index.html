@@ -135,6 +135,7 @@ details.card[open] .arr{transform:rotate(180deg)}
 .pright{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
 .pright .btn.small{min-height:34px;padding:4px 12px}
 .notice{background:var(--accent-soft);border-radius:14px;padding:14px;font-size:14px;display:flex;flex-direction:column;gap:10px}
+.mv{width:34px;height:34px;border-radius:10px;border:0;background:var(--sunk);color:inherit;display:grid;place-items:center;cursor:pointer}.mv:disabled{opacity:.3;cursor:default}
 </style>
 </head>
 <body>
@@ -209,15 +210,12 @@ const EXP_ORDER=['Продукты','Перекус','Семья','Покупк�
 const BASE={
   in:[['Зарплата','job'],['Подработка','trend'],['Прочее','star']],
   acc:[['Кошелёк','wallet'],['Карта','card'],['Вклад','bank',{reval:true,revalDays:30}]],
-  exp:[['Магазин','cart','base',['Продукты','Алкоголь','Хозтовары']],
+  exp:[['Магазин','cart','base',['Продукты','Алкоголь']],
        ['Перекус','cup','base',['Кофе','Столовая','Кафе']],
-       ['Дом','home','obl',['Коммуналка','Связь','Интернет','Ремонт']],
-       ['Ребёнок','baby','obl',['Питание','Одежда','Врачи','Игрушки']],
-       ['Жена','heart','irr',['Подарки','Цветы','Её личное']],
-       ['Авто','car','irr',['Бензин','Ремонт','Мойка','Штрафы']],
-       ['На себя','person','hob',['Одежда','Стрижка','Хобби','Развлечения']],
-       ['Здоровье','med','obl',['Аптека','Врачи']],
-       ['Платежи','receipt','obl',['Кредит','Подписки']],
+       ['Дом','home','obl',['Коммуналка','Связь','Интернет','Кредит','Ремонт'],{'ремонт':'irr'}],
+       ['Семья','heart','obl',['Общее','Жена'],{'жена':'irr'}],
+       ['Авто','car','irr',['Бензин','Ремонт','Мойка','Штрафы'],{'бензин':'base'}],
+       ['На себя','person','hob',['Одежда','Стрижка','Здоровье','Подписки','Хобби','Развлечения'],{'одежда':'base','стрижка':'base','здоровье':'obl','подписки':'obl'}],
        ['Прочее','scale','irr',['Неучтёнка','Потери']]]
 };
 const IN_ORDER=['ЗП','Активы','Авито','Прочее'];
@@ -513,48 +511,73 @@ function openReg(id){
 }
 
 /* ---------- аналитика ---------- */
+// открытые блоки аналитики: по умолчанию «Месяц» и «Категории»
+const statOpen=new Set((()=>{try{const v=JSON.parse(localStorage.getItem('monetki.statOpen'));if(Array.isArray(v))return v}catch(e){}return ['month','cats']})());
+const STAT_KEYS=['money','month','year','cats','types'];
+// порядок блоков аналитики — тоже на этом устройстве; новые блоки добавляются в конец
+const statOrder=(()=>{let v=[];try{v=JSON.parse(localStorage.getItem('monetki.statOrder'))||[]}catch(e){}v=v.filter(k=>STAT_KEYS.includes(k));return v.concat(STAT_KEYS.filter(k=>!v.includes(k)))})();
+const statPos=k=>statOrder.indexOf(k);let statEdit=false;
 function renderStats(){
-  let h='<h1>Аналитика</h1>';
+  let h='<h1 style="display:flex;align-items:center;gap:8px"><span style="flex:1">Аналитика</span>'+(S&&S.ops.length?'<button id="s-order" class="btn small" style="font-size:14px" aria-pressed="'+statEdit+'">'+(statEdit?'Готово':'Порядок')+'</button>':'')+'</h1>';const B={};
   if(!S||!S.ops.length){$('stats').innerHTML=h+'<div class="empty">Появится, когда будут операции.</div>';return}
   const cur=ym(today()),m=statMonth,isCur=m===cur,day=isCur?+today().slice(8):31;
   // деньги сейчас — всегда на сегодня
   const all=flows(null),accs=S.items.filter(x=>x.g==='acc'&&!x.hidden).map(it=>({it,v:itemValue(it,{},all)}));
   const live=accs.filter(a=>!a.it.reval).reduce((s,a)=>s+a.v,0),sav=accs.filter(a=>a.it.reval).reduce((s,a)=>s+a.v,0);
-  h+='<div class="card"><div class="row"><h2 class="grow">Деньги сейчас</h2><b class="num big" style="font-size:20px">'+rub(live+sav)+'</b></div>'+
+  // блоки сворачиваются; какие открыты — запоминаем на этом устройстве
+  // в свёрнутом виде видно главное: заголовок, короткая «зацепка» и ключевая цифра
+  const sec=(key,title,meta,body,tease)=>'<details class="card" data-asec="'+key+'"'+(statOpen.has(key)?' open':'')+'><summary><span class="grow" style="min-width:0"><h2>'+title+'</h2>'+(tease?'<span class="sub" style="display:block;margin-top:2px">'+tease+'</span>':'')+'</span>'+(statEdit?'<span style="display:flex;gap:6px">'+[[-1,'M6 15l6-6 6 6','Выше'],[1,'M6 9l6 6 6-6','Ниже']].map(([d,p,l])=>'<button class="mv" data-mv="'+key+'" data-d="'+d+'" aria-label="'+l+'"'+(statPos(key)+d<0||statPos(key)+d>=statOrder.length?' disabled':'')+'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="'+p+'"/></svg></button>').join('')+'</span>':'<b class="num" style="white-space:nowrap">'+meta+'</b><svg class="arr" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>')+'</summary><div class="secbody">'+body+'</div></details>';
+  B.money=sec('money','Деньги сейчас',rub(live+sav),
      '<div class="two"><div><div class="sub">Живые</div><b class="num">'+rub(live)+'</b></div><div><div class="sub">Накопления</div><b class="num">'+rub(sav)+'</b></div></div>'+
-     accs.map(a=>'<div class="row" style="font-size:14px"><span class="grow sub" style="font-size:14px">'+esc(a.it.name)+'</span><span class="num">'+rub(a.v)+'</span></div>').join('')+'</div>';
+     accs.map(a=>'<div class="row" style="font-size:14px"><span class="grow sub" style="font-size:14px">'+esc(a.it.name)+'</span><span class="num">'+rub(a.v)+'</span></div>').join(''),
+     'живые '+rub(live)+' · накопления '+rub(sav));
   // выбор месяца
-  h+='<div class="month" style="padding:0"><button id="s-prev" aria-label="Предыдущий месяц">‹</button><b>'+monthLabel(m)+'</b><button id="s-next" aria-label="Следующий месяц"'+(isCur?' disabled':'')+'>›</button></div>';
   const prev=[1,2,3,4,5,6].map(k=>addMonth(m,-k)).filter(x=>S.ops.some(o=>ym(o.d)===x));
   const now=monthSpend(m),usual=prev.length?prev.reduce((s,x)=>s+monthSpend(x,day),0)/prev.length:0,inc=monthIncome(m);
-  h+='<div class="card"><div class="sub">'+(isCur?'1–'+day+' число':'весь месяц')+'</div><div class="two"><div><div class="sub">Потрачено</div><div class="big num">'+rub(now)+'</div></div><div><div class="sub">'+(isCur?'Обычно к '+day+'-му':'Обычно за месяц')+'</div><div class="big num" style="color:var(--muted)">'+rub(usual)+'</div></div></div>'+
+  B.month=sec('month',monthLabel(m),'−'+rub(now),
+     '<div class="sub">'+(isCur?'1–'+day+' число':'весь месяц')+'</div><div class="two"><div><div class="sub">Потрачено</div><div class="big num">'+rub(now)+'</div></div><div><div class="sub">'+(isCur?'Обычно к '+day+'-му':'Обычно за месяц')+'</div><div class="big num" style="color:var(--muted)">'+rub(usual)+'</div></div></div>'+
      '<div class="track"><i style="width:'+Math.min(100,usual?now/usual*100:0)+'%;background:'+(now>usual?'var(--bad)':'var(--accent)')+'"></i></div>'+
      '<div class="row" style="font-size:14px"><span class="grow sub" style="font-size:14px">Доходы</span><b class="num" style="color:var(--good)">+'+fmt(inc)+'</b></div>'+
      '<div class="row" style="font-size:14px"><span class="grow sub" style="font-size:14px">Итог месяца</span><b class="num" style="color:'+(inc-now>=0?'var(--good)':'var(--bad)')+'">'+(inc-now>=0?'+':'−')+rub(Math.abs(inc-now))+'</b></div>'+
-     '<div class="sub">Сравнение со средним за '+prev.length+' предыдущих мес.'+(isCur?' к этому же числу':'')+'</div></div>';
+     '<div class="sub">Сравнение со средним за '+prev.length+' предыдущих мес.'+(isCur?' к этому же числу':'')+'</div>',
+     usual?(now<=usual?'на '+Math.round((1-now/usual)*100)+'% меньше обычного':'на '+Math.round((now/usual-1)*100)+'% больше обычного')+' · итог '+(inc-now>=0?'+':'−')+fmt(Math.abs(inc-now)):'');
   // 12 месяцев
   const ms=[];for(let k=11;k>=0;k--)ms.push(addMonth(cur,-k));
   const data=ms.map(x=>({m:x,i:monthIncome(x),e:monthSpend(x)}));
   const max=Math.max(1,...data.map(x=>Math.max(x.i,x.e)));
   const statSel=Math.max(0,ms.indexOf(m)),s=data[statSel],net=s.i-s.e;
-  h+='<div class="card"><div class="row"><h2 class="grow">12 месяцев</h2><span class="sub"><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--bar-in)"></i> доход &nbsp;<i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--bar-exp)"></i> расход</span></div>'+
+  const y12=data.reduce((a,x)=>a+x.i-x.e,0);
+  B.year=sec('year','Год',(y12>=0?'+':'−')+rub(Math.abs(y12)),
+     '<div class="row"><span class="grow"></span><span class="sub"><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--bar-in)"></i> доход &nbsp;<i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--bar-exp)"></i> расход</span></div>'+
      '<div class="row num" style="background:var(--sunk);border-radius:10px;padding:8px 10px;font-size:13px"><b class="grow">'+monthLabel(s.m)+'</b><span>+'+fmt(s.i)+' · −'+fmt(s.e)+' · <b style="color:'+(net>=0?'var(--good)':'var(--bad)')+'">'+(net>=0?'+':'−')+fmt(Math.abs(net))+'</b></span></div>'+
      '<div class="bars">'+data.map((x,i)=>'<button data-bar="'+i+'" aria-pressed="'+(i===statSel)+'" aria-label="'+monthLabel(x.m)+'"><i style="height:'+Math.max(2,x.i/max*136)+'px;background:var(--bar-in)"></i><i style="height:'+Math.max(2,x.e/max*136)+'px;background:var(--bar-exp)"></i></button>').join('')+'</div>'+
-     '<div class="blabels">'+data.map(x=>'<span>'+MON_S[+x.m.slice(5)-1]+'</span>').join('')+'</div></div>';
+     '<div class="blabels">'+data.map(x=>'<span>'+MON_S[+x.m.slice(5)-1]+'</span>').join('')+'</div>',
+     (()=>{const w=data.slice(0,-1).reduce((a,x)=>x.e>a.e?x:a,{e:0,m:cur});const minus=data.filter(x=>x.i<x.e).length;return 'в минусе '+minus+' мес. из 12 · самый дорогой — '+MON[+w.m.slice(5)-1]})());
   // категории и слои
   const cats=S.items.filter(x=>x.g==='exp');const full=prev;
   const rows=cats.map(c=>{const nowv=catSpend(c.id,m),avg=full.length?full.reduce((s,x)=>s+catSpend(c.id,x),0)/full.length:0;return {c,nowv,avg}}).filter(r=>r.nowv||r.avg).sort((a,b)=>b.avg-a.avg);
   const cmax=Math.max(1,...rows.map(r=>Math.max(r.avg,r.nowv)));
   const sub=r=>tagRows(r.c.id,m,full,r.avg).map(t=>'<div data-dyn="'+r.c.id+'" data-tag="'+esc(t.key)+'" role="button" tabindex="0" style="padding-left:14px;margin-top:6px;cursor:pointer"><div class="row" style="font-size:13px"><span class="grow sub" style="font-size:13px">в т. ч. '+esc(t.name)+' <span class="num">· '+Math.round(t.avg/(r.avg||1)*100)+'%</span></span><span class="num"><span class="sub">'+fmt(t.nowv)+' · </span>'+rub(t.avg)+'</span></div><div class="track" style="margin-top:3px;height:5px"><i style="width:'+(t.avg/cmax*100)+'%;background:var(--sunk);filter:brightness(.85)"></i><i style="width:'+(t.nowv/cmax*100)+'%;background:var(--bar-exp)"></i></div></div>').join('');
-  h+='<div class="card"><div class="row"><h2 class="grow">Категории</h2><span class="sub">'+(isCur?'сейчас':MON_S[+m.slice(5)-1].toLowerCase())+' · средний месяц</span></div>'+rows.map(r=>'<div><div data-dyn="'+r.c.id+'" role="button" tabindex="0" style="cursor:pointer"><div class="row" style="font-size:14px"><span class="grow">'+esc(r.c.name)+' <span class="sub">›</span></span><span class="num"><span class="sub">'+fmt(r.nowv)+' · </span><b>'+rub(r.avg)+'</b></span></div><div class="track" style="margin-top:4px"><i style="width:'+(r.avg/cmax*100)+'%;background:var(--sunk);filter:brightness(.85)"></i><i style="width:'+(r.nowv/cmax*100)+'%;background:var(--bar-in)"></i></div></div>'+sub(r)+'</div>').join('')+
-     '<div class="sub">Нажми на категорию или метку, чтобы увидеть динамику по месяцам.</div></div>';
-  const lay={};for(const r of rows){const l=r.c.layer||'base';lay[l]=(lay[l]||0)+r.avg}
+  B.cats=sec('cats','Категории',rows.length+' шт.','<div class="row sub"><span class="grow"></span>'+(isCur?'сейчас':MON_S[+m.slice(5)-1].toLowerCase())+' · средний месяц</div>'+rows.map(r=>'<div><div data-dyn="'+r.c.id+'" role="button" tabindex="0" style="cursor:pointer"><div class="row" style="font-size:14px"><span class="grow">'+esc(r.c.name)+' <span class="sub">›</span></span><span class="num"><span class="sub">'+fmt(r.nowv)+' · </span><b>'+rub(r.avg)+'</b></span></div><div class="track" style="margin-top:4px"><i style="width:'+(r.avg/cmax*100)+'%;background:var(--sunk);filter:brightness(.85)"></i><i style="width:'+(r.nowv/cmax*100)+'%;background:var(--bar-in)"></i></div></div>'+sub(r)+'</div>').join('')+
+     '<div class="sub">Нажми на категорию или метку, чтобы увидеть динамику по месяцам.</div>',
+     (()=>{if(!rows.length)return '';const top=rows[0];const grow=rows.filter(r=>r.avg>0).map(r=>({r,k:r.nowv/r.avg})).sort((a,b)=>b.k-a.k)[0];return 'больше всего — '+esc(top.c.name)+(isCur&&grow&&grow.k>0.8?' · '+esc(grow.r.c.name)+' уже '+Math.round(grow.k*100)+'% от обычного':'')})());
+  const lay={},expById={};for(const c of cats)expById[c.id]=c;const fs=new Set(full);
+  for(const o of S.ops){if(!fs.has(ym(o.d)))continue;
+    if(expById[o.to]){const l=opLayer(o,expById[o.to]);lay[l]=(lay[l]||0)+o.sum/full.length}
+    else if(expById[o.from]){const l=opLayer(o,expById[o.from]);lay[l]=(lay[l]||0)-o.sum/full.length}}
+  for(const k in lay)if(lay[k]<=0)delete lay[k];
   const lsum=Object.values(lay).reduce((a,b)=>a+b,0)||1;
-  h+='<div class="card"><div class="row"><h2 class="grow">Средний месяц по типам</h2><b class="num">'+rub(lsum)+'</b></div><div style="display:flex;height:12px;border-radius:6px;overflow:hidden;gap:2px">'+Object.keys(LAYERS).filter(k=>lay[k]).map(k=>'<i style="width:'+(lay[k]/lsum*100)+'%;background:var('+LAYERS[k].c+')"></i>').join('')+'</div>'+
+  B.types=sec('types','Средний месяц по типам',rub(lsum),'<div style="display:flex;height:12px;border-radius:6px;overflow:hidden;gap:2px">'+Object.keys(LAYERS).filter(k=>lay[k]).map(k=>'<i style="width:'+(lay[k]/lsum*100)+'%;background:var('+LAYERS[k].c+')"></i>').join('')+'</div>'+
      Object.keys(LAYERS).filter(k=>lay[k]).map(k=>'<div class="row" style="font-size:14px"><i style="width:10px;height:10px;border-radius:3px;background:var('+LAYERS[k].c+')"></i><span class="grow">'+LAYERS[k].n+'</span><b class="num">'+rub(lay[k])+'</b></div>').join('')+
-     '<div class="sub">Тип у каждой категории меняется в «Ещё → Категории».</div></div>';
+     '<div class="sub">Типы меняются в «Ещё → Категории»: у категории и отдельно у подкатегорий.</div>',
+     lay.obl?'обязательное — '+Math.round(lay.obl/lsum*100)+'% трат':'');
+  h+='<div class="month" style="padding:0"><button id="s-prev" aria-label="Предыдущий месяц">‹</button><b>'+monthLabel(m)+'</b><button id="s-next" aria-label="Следующий месяц"'+(isCur?' disabled':'')+'>›</button></div>';
+  h+=statOrder.map(k=>B[k]||'').join('');
   $('stats').innerHTML=h;
+  $('stats').querySelectorAll('details[data-asec]').forEach(d=>d.addEventListener('toggle',()=>{d.open?statOpen.add(d.dataset.asec):statOpen.delete(d.dataset.asec);try{localStorage.setItem('monetki.statOpen',JSON.stringify([...statOpen]))}catch(e){}}));
   $('stats').querySelectorAll('[data-bar]').forEach(b=>b.onclick=()=>{statMonth=ms[+b.dataset.bar];renderStats()});
+  $('s-order').onclick=()=>{statEdit=!statEdit;renderStats()};
+  $('stats').querySelectorAll('[data-mv]').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();const i=statPos(b.dataset.mv),j=i+ +b.dataset.d;if(j<0||j>=statOrder.length)return;[statOrder[i],statOrder[j]]=[statOrder[j],statOrder[i]];try{localStorage.setItem('monetki.statOrder',JSON.stringify(statOrder))}catch(e){}renderStats()});
   $('s-prev').onclick=()=>{statMonth=addMonth(statMonth,-1);renderStats()};
   $('s-next').onclick=()=>{if(statMonth<cur){statMonth=addMonth(statMonth,1);renderStats()}};
   $('stats').querySelectorAll('[data-dyn]').forEach(b=>{const go=e=>{e.stopPropagation();openDyn(b.dataset.dyn,b.dataset.tag||'')};b.onclick=go;b.onkeydown=e=>{if(e.key==='Enter'||e.key===' ')go(e)}});
@@ -611,6 +634,8 @@ function drawDyn(){
   $('panel').querySelectorAll('[data-dt]').forEach(b=>b.onclick=()=>{D.tag=b.dataset.dt;D.sel=null;drawDyn()});
   if($('d-all'))$('d-all').onclick=()=>{D.tag='';D.sel=null;drawDyn()};
 }
+// Тип траты операции: у подкатегории свой тип, если задан, иначе — тип категории
+function opLayer(o,cat){const sl=cat.subLayer||{};const t=o.tag&&o.tag.trim().toLowerCase();return (t&&sl[t])||cat.layer||'base'}
 function catSpend(id,m){let s=0;for(const o of S.ops){if(ym(o.d)!==m)continue;if(o.to===id)s+=o.sum;if(o.from===id)s-=o.sum}return s}
 
 /* ---------- ещё ---------- */
@@ -646,7 +671,8 @@ function openItemEdit(id,g){
    '<div class="chips" id="i-icons">'+Object.keys(ICONS).filter(k=>k!=='plus').map(k=>'<button class="chip" data-icon="'+k+'" aria-pressed="'+(it.icon===k)+'" aria-label="'+k+'">'+svg(ICONS[k],18,'currentColor')+'</button>').join('')+'</div>'+
    (it.g==='acc'&&!id?'<label class="field">Начальный остаток<input id="i-start" inputmode="numeric" value="0"></label>':'')+
    (it.g==='exp'?'<label class="field">Подкатегории (через запятую)<input id="i-subs" value="'+esc((it.subs||[]).join(', '))+'" placeholder="Продукты, Алкоголь"></label>':'')+
-   (it.g==='exp'?'<div class="field">Тип трат<div class="chips">'+Object.keys(LAYERS).map(k=>'<button class="chip" data-layer="'+k+'" aria-pressed="'+((it.layer||'base')===k)+'">'+LAYERS[k].n+'</button>').join('')+'</div></div>':'')+
+   (it.g==='exp'?'<div class="field">Тип трат категории<div class="chips">'+Object.keys(LAYERS).map(k=>'<button class="chip" data-layer="'+k+'" aria-pressed="'+((it.layer||'base')===k)+'">'+LAYERS[k].n+'</button>').join('')+'</div></div>':'')+
+   (it.g==='exp'&&(it.subs||[]).length?'<div class="field">Тип у подкатегорий'+(it.subs||[]).map((sb,i)=>{const cur=(it.subLayer||{})[sb.toLowerCase()]||'';return '<div class="row" style="font-size:14px;color:var(--fg)"><span class="grow">'+esc(sb)+'</span><select data-sl="'+esc(sb.toLowerCase())+'" aria-label="Тип для '+esc(sb)+'" style="border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 8px;min-height:36px;color:var(--fg)"><option value=""'+(cur?'':' selected')+'>как у категории</option>'+Object.keys(LAYERS).map(k=>'<option value="'+k+'"'+(cur===k?' selected':'')+'>'+LAYERS[k].n+'</option>').join('')+'</select></div>'}).join('')+'</div>':'')+
    (it.g==='acc'?'<div class="field">Напоминать о переоценке<div class="chips">'+[[0,'Нет'],[7,'Раз в неделю'],[14,'Раз в 2 недели'],[30,'Раз в месяц']].map(p=>'<button class="chip" data-rv="'+p[0]+'" aria-pressed="'+((it.reval?(it.revalDays||30):0)===p[0])+'">'+p[1]+'</button>').join('')+'</div></div>':'')+
    '<button class="btn primary" id="i-save">Сохранить</button>'+(id?'<button class="btn" id="i-hide">'+(it.hidden?'Показывать':'Скрыть с экрана')+'</button>':'');
   let icon=it.icon,layer=it.layer||'base',rv=it.reval?(it.revalDays||30):0;
@@ -657,7 +683,8 @@ function openItemEdit(id,g){
   $('i-save').onclick=()=>{const n=$('i-name').value.trim();if(!n){toast('Введи название');return}
     const rvf=it.g==='acc'?{reval:rv>0,revalDays:rv||undefined}:{};
     const subs=$('i-subs')?$('i-subs').value.split(',').map(x=>x.trim()).filter(Boolean):undefined;
-    if(id){it.name=n;it.icon=icon;if(it.g==='exp'){it.layer=layer;it.subs=subs}Object.assign(it,rvf)}else S.items.push(Object.assign({id:uid('i'),g:it.g,name:n,icon,start:+($('i-start')&&$('i-start').value)||0,layer:it.g==='exp'?layer:undefined,subs:it.g==='exp'?subs:undefined},rvf));
+    const subLayer={};$('panel').querySelectorAll('[data-sl]').forEach(x=>{if(x.value&&subs&&subs.some(sb=>sb.toLowerCase()===x.dataset.sl))subLayer[x.dataset.sl]=x.value});
+    if(id){it.name=n;it.icon=icon;if(it.g==='exp'){it.layer=layer;it.subs=subs;it.subLayer=subLayer}Object.assign(it,rvf)}else S.items.push(Object.assign({id:uid('i'),g:it.g,name:n,icon,start:+($('i-start')&&$('i-start').value)||0,layer:it.g==='exp'?layer:undefined,subs:it.g==='exp'?subs:undefined},rvf));
     persist();closeSheet();render()};
   if(id)$('i-hide').onclick=()=>{it.hidden=!it.hidden;persist();closeSheet();render()};
 }
@@ -728,7 +755,7 @@ $('fr-import').onclick=()=>$('file-csv').click();
 $('fr-empty').onclick=()=>{S=blank();
   for(const [n,ic] of BASE.in)S.items.push({id:uid('i'),g:'in',name:n,icon:ic});
   for(const [n,ic,x] of BASE.acc)S.items.push(Object.assign({id:uid('i'),g:'acc',name:n,icon:ic,start:0},x||{}));
-  for(const [n,ic,l,subs] of BASE.exp)S.items.push({id:uid('i'),g:'exp',name:n,icon:ic,layer:l,subs:subs.slice()});
+  for(const [n,ic,l,subs,sl] of BASE.exp)S.items.push({id:uid('i'),g:'exp',name:n,icon:ic,layer:l,subs:subs.slice(),subLayer:Object.assign({},sl||{})});
   persist();render()};
 
 /* ---------- общее ---------- */
