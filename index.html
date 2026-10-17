@@ -301,10 +301,11 @@ function renderCoins(){
   const cm=ym(today()),mf=flows(cm),all=flows(null);  // главный экран всегда показывает текущий месяц
   const vis=g=>S.items.filter(x=>x.g===g&&!x.hidden);
   const coin=it=>'<button class="coin '+it.g+'" data-id="'+it.id+'"><span class="nm">'+esc(it.name)+'</span><span class="c">'+svg(ICONS[it.icon]||ICONS.star)+'</span><span class="s num">'+rub(itemValue(it,mf,all))+'</span></button>';
-  // новые монеты добавляются только через «Ещё»
-  $('g-in').innerHTML=vis('in').map(coin).join('');$('g-in').classList.toggle('few',vis('in').length<=4);
-  $('g-acc').innerHTML=vis('acc').map(coin).join('');$('g-acc').classList.toggle('few',vis('acc').length<=4);
-  $('g-exp').innerHTML=vis('exp').map(coin).join('');
+  // в конце каждого ряда — монета «+», чтобы добавить доход, счёт или категорию прямо отсюда
+  const add=(g,l)=>'<button class="coin add" data-add="'+g+'" aria-label="Добавить '+l+'"><span class="nm">Добавить</span><span class="c">'+svg(ICONS.plus,22,'var(--muted)')+'</span><span class="s">&nbsp;</span></button>';
+  $('g-in').innerHTML=vis('in').map(coin).join('')+add('in','доход');$('g-in').classList.toggle('few',vis('in').length<4);
+  $('g-acc').innerHTML=vis('acc').map(coin).join('')+add('acc','счёт');$('g-acc').classList.toggle('few',vis('acc').length<4);
+  $('g-exp').innerHTML=vis('exp').map(coin).join('')+add('exp','категорию');
   $('band-in').hidden=!showIn;
   $('toggle-in').querySelector('svg').style.transform=showIn?'rotate(180deg)':'none';
   $('toggle-in').setAttribute('aria-label',showIn?'Скрыть доходы':'Показать доходы');
@@ -381,10 +382,11 @@ function canMove(a,b){if(!a||!b||a.id===b.id)return false;return (a.g==='in'&&b.
 const colorVar={in:'var(--in)',acc:'var(--acc)',exp:'var(--exp)'};
 $('coins-scroll').addEventListener('pointerdown',e=>{
   const el=e.target.closest('.coin');if(!el)return;
-  if(el.dataset.add){openItemEdit(null,el.dataset.add);return}
+  if(el.dataset.add)return;  // «+» открывается по клику, чтобы свайп ряда его не срабатывал
   drag={id:el.dataset.id,x:e.clientX,y:e.clientY,moved:false,el,ghost:null,hot:null};
   el.setPointerCapture&&el.setPointerCapture(e.pointerId);
 });
+$('coins-scroll').addEventListener('click',e=>{const a=e.target.closest('.coin[data-add]');if(a)openItemEdit(null,a.dataset.add)});
 document.addEventListener('pointermove',e=>{
   if(!drag)return;
   if(!drag.moved&&Math.abs(e.clientX-drag.x)+Math.abs(e.clientY-drag.y)>8){
