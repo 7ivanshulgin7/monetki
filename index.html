@@ -677,12 +677,14 @@ function renderMore(){
   }
   h+=sec('data','Данные',S?'операций: '+fmt(S.ops.length):'',
      '<div class="sub">Всё хранится только на этом телефоне. Делай копию время от времени.</div>'+
-     '<button class="btn" id="m-export">Сохранить копию (JSON)</button><button class="btn" id="m-restore">Восстановить из копии</button><button class="btn" id="m-csv">Загрузить CSV из CoinKeeper</button>');
+     (S?'<button class="btn" id="m-sort">Разобрать категории и метки</button><button class="btn" id="m-csvout">Выгрузить в CSV (для Excel)</button>':'')+
+     '<button class="btn" id="m-csv">Загрузить CSV (свой или CoinKeeper)</button><button class="btn" id="m-export">Сохранить копию (JSON)</button><button class="btn" id="m-restore">Восстановить из копии</button>');
   h+='<div style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 0 8px;color:var(--fg)">'+SIG+'<div class="sub">Монетки · бета</div></div>';
   $('more').innerHTML=h;
   $('more').querySelectorAll('details').forEach(d=>d.addEventListener('toggle',()=>{d.open?openSecs.add(d.dataset.sec):openSecs.delete(d.dataset.sec)}));
   $('more').querySelectorAll('[data-item]').forEach(b=>b.onclick=()=>openItemEdit(b.dataset.item));
   $('more').querySelectorAll('[data-new]').forEach(b=>b.onclick=()=>openItemEdit(null,b.dataset.new));
+  if($('m-sort')){$('m-sort').onclick=()=>openSort();$('m-csvout').onclick=exportCsv}
   $('m-export').onclick=exportJson;$('m-restore').onclick=()=>$('file-json').click();$('m-csv').onclick=()=>$('file-csv').click();
 }
 // Свёрнутые разделы настроек; открытые запоминаются, пока приложение открыто
@@ -732,6 +734,183 @@ function openItemEdit(id,g){
     persist();closeSheet();if(moved)toast('Перенесено операций: '+moved);render()};
   if(id)$('i-hide').onclick=()=>{it.hidden=!it.hidden;persist();closeSheet();render()};
 }
+/* ---------- разбор истории: категории, счета, метки ---------- */
+// Объединение категорий и счетов, перенос, переименование и слияние меток по всей истории.
+// Перед каждым действием — снимок базы, последнее действие можно отменить.
+let sortUndo=null;
+const tkey=t=>(t||'').trim().toLowerCase();
+const mdate=d=>d.slice(5,7)+'.'+d.slice(0,4);
+function itemOps(it){return S.ops.filter(o=>o.to===it.id||o.from===it.id)}
+function tagStats(it){
+  const m={};
+  for(const o of S.ops){if(o.to!==it.id&&o.from!==it.id)continue;const k=tkey(o.tag);
+    const r=m[k]=m[k]||{k,name:k?o.tag.trim():'',n:0,s:0};r.n++;r.s+=o.sum}
+  for(const sb of it.subs||[]){const r=m[tkey(sb)];if(r)r.name=sb}
+  return Object.values(m).sort((a,b)=>(a.k?1:0)-(b.k?1:0)||b.s-a.s);
+}
+function mergeItems(src,dst,keep){
+  for(const o of S.ops){
+    if(o.to!==src.id&&o.from!==src.id)continue;
+    if(keep&&src.g!=='acc'&&!tkey(o.tag))o.tag=src.name;
+    if(o.to===src.id)o.to=dst.id;if(o.from===src.id)o.from=dst.id;
+  }
+  S.ops=S.ops.filter(o=>o.from!==o.to);   // перевод между двумя слитыми счетами теряет смысл
+  if(src.g==='acc')dst.start=(dst.start||0)+(src.start||0);
+  if(src.g==='exp'){
+    const subs=[...(dst.subs||[])],add=n=>{if(n&&!subs.some(x=>tkey(x)===tkey(n)))subs.push(n)};
+    (src.subs||[]).forEach(add);if(keep)add(src.name);dst.subs=subs;
+    dst.subLayer=Object.assign({},src.subLayer||{},dst.subLayer||{});
+    if(keep&&(src.layer||'base')!==(dst.layer||'base')&&!dst.subLayer[tkey(src.name)])dst.subLayer[tkey(src.name)]=src.layer||'base';
+  }
+  for(const r of S.regular){if(r.from===src.id)r.from=dst.id;if(r.to===src.id)r.to=dst.id}
+  S.items=S.items.filter(x=>x.id!==src.id);
+}
+function openSort(g){
+  g=g||'exp';let cur=null,openTag=null,armed=null;
+  const snap=()=>{sortUndo=JSON.stringify(S)};
+  const done=msg=>{persist();armed=null;toast(msg);draw();render()};
+  const draw=()=>{
+    let h='<div class="row">'+(cur?'<button class="btn small" id="z-back">‹ Назад</button><span class="grow"></span>':'<b class="grow">Разбор истории</b>')+
+      (sortUndo?'<button class="btn small" id="z-undo">Отменить</button>':'')+'<button class="x" id="z-close" aria-label="Закрыть">✕</button></div>';
+    if(!cur){
+      h+='<div class="sub">Объединяй категории и счета, переноси и сливай метки. Меняется вся история; последнее действие можно отменить.</div>';
+      h+='<div class="chips">'+[['exp','Расходы'],['in','Доходы'],['acc','Счета']].map(([k,l])=>'<button class="chip" data-zg="'+k+'" aria-pressed="'+(g===k)+'">'+l+'</button>').join('')+'</div>';
+      const all=flows(null);
+      const list=S.items.filter(x=>x.g===g).map(it=>{let n=0,s=0;for(const o of S.ops){if(o.to===it.id){n++;s+=g==='in'?-o.sum:o.sum}else if(o.from===it.id){n++;s+=g==='in'?o.sum:-o.sum}}
+        return {it,n,s:g==='acc'?itemValue(it,{},all):s,tags:g==='acc'?0:tagStats(it).filter(t=>t.k).length}})
+        .sort((a,b)=>(a.it.hidden?1:0)-(b.it.hidden?1:0)||b.s-a.s);
+      h+=list.map(r=>'<button class="op" style="background:var(--sunk)" data-zi="'+r.it.id+'"><span class="grow" style="min-width:0"><span style="display:block">'+esc(r.it.name)+(r.it.hidden?' <span class="sub">· архив</span>':'')+'</span><span class="sub">'+fmt(r.n)+' оп.'+(r.tags?' · меток: '+r.tags:'')+'</span></span><b class="num">'+rub(r.s)+'</b></button>').join('')||'<div class="sub">Пусто.</div>';
+    }else{
+      const it=byId(cur),os=itemOps(it),others=S.items.filter(x=>x.g===it.g&&x.id!==it.id);
+      const ds=os.map(o=>o.d).sort();
+      h+='<h2 style="margin:0">'+esc(it.name)+(it.hidden?' <span class="sub">· архив</span>':'')+'</h2><div class="sub">'+fmt(os.length)+' оп.'+(ds.length?' · '+mdate(ds[0])+' — '+mdate(ds[ds.length-1]):'')+'</div>';
+      h+='<button class="btn small" id="z-edit">Название, иконка, подкатегории…</button>';
+      if(others.length)h+='<div class="card" style="background:var(--sunk);padding:12px;gap:8px"><b>Объединить</b><label class="field">Перенести все операции в<select id="z-into"><option value="">— выбери —</option>'+others.map(x=>'<option value="'+x.id+'">'+esc(x.name)+(x.hidden?' (архив)':'')+'</option>').join('')+'</select></label>'+
+        (it.g!=='acc'?'<label class="row" style="font-size:14px;gap:8px;align-items:flex-start"><input type="checkbox" id="z-keep" checked style="margin-top:3px"><span>Операции без метки получат метку «'+esc(it.name)+'»'+(it.g==='exp'?', она станет подкатегорией':'')+'</span></label>':'<div class="sub">Остатки счетов сложатся, переводы между ними исчезнут.</div>')+
+        '<button class="btn" id="z-merge">Объединить</button></div>';
+      if(!os.length)h+='<button class="btn" id="z-del">Удалить пустую</button>';
+      if(it.g!=='acc'){
+        const ts=tagStats(it);
+        h+='<b style="margin-top:4px">Метки</b><div class="sub">Нажми на метку: переименуй (назовёшь как другую — сольются), перенеси в другую категорию или убери.</div>';
+        h+='<datalist id="z-dl">'+[...new Set([...(it.subs||[]),...ts.filter(t=>t.k).map(t=>t.name)])].map(t=>'<option value="'+esc(t)+'">').join('')+'</datalist>';
+        h+=ts.map(t=>{const isSub=t.k&&(it.subs||[]).some(sb=>tkey(sb)===t.k);
+          const row='<button class="op" style="background:var(--sunk)" data-zt="'+esc(t.k)+'" aria-expanded="'+(openTag===t.k)+'"><span class="grow" style="min-width:0">'+(t.k?esc(t.name):'<span class="sub">без метки</span>')+(isSub?' <span class="sub">· подкатегория</span>':'')+'</span><span class="sub num">'+fmt(t.n)+' оп. · </span><b class="num">'+rub(t.s)+'</b></button>';
+          if(openTag!==t.k)return row;
+          return row+'<div class="card" style="background:var(--sunk);padding:12px;gap:8px;margin-top:-4px">'+
+            '<label class="field">'+(t.k?'Название метки':'Поставить метку')+'<input id="z-tn" list="z-dl" value="'+esc(t.name)+'" placeholder="'+(t.k?'пусто — убрать метку':'например, Бензин')+'"></label>'+
+            '<label class="field">Категория<select id="z-tc">'+[it,...others].map(x=>'<option value="'+x.id+'"'+(x.id===it.id?' selected':'')+'>'+esc(x.name)+(x.hidden?' (архив)':'')+'</option>').join('')+'</select></label>'+
+            (it.g==='exp'?'<label class="row" style="font-size:14px;gap:8px"><input type="checkbox" id="z-ts" checked> сделать подкатегорией</label>':'')+
+            '<button class="btn primary" id="z-tapply">Применить к '+fmt(t.n)+' оп.</button></div>'}).join('');
+      }
+    }
+    $('panel').innerHTML=h;$('sheet').hidden=false;
+    $('z-close').onclick=closeSheet;
+    if($('z-back'))$('z-back').onclick=()=>{cur=null;openTag=null;armed=null;draw()};
+    if($('z-undo'))$('z-undo').onclick=()=>{S=JSON.parse(sortUndo);sortUndo=null;persist();if(cur&&!byId(cur))cur=null;openTag=null;toast('Отменено');draw();render()};
+    $('panel').querySelectorAll('[data-zg]').forEach(b=>b.onclick=()=>{g=b.dataset.zg;draw()});
+    $('panel').querySelectorAll('[data-zi]').forEach(b=>b.onclick=()=>{cur=b.dataset.zi;openTag=null;armed=null;draw();$('panel').scrollTop=0});
+    if(!cur)return;
+    const it=byId(cur);
+    $('z-edit').onclick=()=>openItemEdit(cur);
+    $('panel').querySelectorAll('[data-zt]').forEach(b=>b.onclick=()=>{openTag=openTag===b.dataset.zt?null:b.dataset.zt;draw();const f=$('z-tn');if(f)f.scrollIntoView({block:'nearest'})});
+    if($('z-merge'))$('z-merge').onclick=e=>{const to=$('z-into').value;if(!to){toast('Выбери, куда перенести');return}
+      if(armed!=='merge'){armed='merge';e.target.textContent='Точно объединить? Нажми ещё раз';return}
+      const dst=byId(to);snap();mergeItems(it,dst,$('z-keep')?$('z-keep').checked:false);cur=dst.id;openTag=null;done('Объединено с «'+dst.name+'»')};
+    if($('z-into'))$('z-into').onchange=()=>{armed=null;$('z-merge').textContent='Объединить'};
+    if($('z-del'))$('z-del').onclick=e=>{if(armed!=='del'){armed='del';e.target.textContent='Точно удалить?';return}
+      snap();S.items=S.items.filter(x=>x.id!==it.id);S.regular=S.regular.filter(r=>r.from!==it.id&&r.to!==it.id);cur=null;done('Удалено')};
+    if($('z-tapply'))$('z-tapply').onclick=()=>{
+      const k=openTag,nn=$('z-tn').value.trim(),dst=byId($('z-tc').value),mk=!!($('z-ts')&&$('z-ts').checked);
+      if(tkey(nn)===k&&dst.id===it.id&&(!mk||!nn||(it.subs||[]).some(x=>tkey(x)===k))&&nn===((tagStats(it).find(t=>t.k===k)||{}).name)){toast('Ничего не изменилось');return}
+      snap();let n=0;
+      for(const o of S.ops){if((o.to!==it.id&&o.from!==it.id)||tkey(o.tag)!==k)continue;
+        if(nn)o.tag=nn;else delete o.tag;
+        if(dst.id!==it.id){if(o.to===it.id)o.to=dst.id;if(o.from===it.id)o.from=dst.id}
+        n++}
+      // старая подкатегория, которой больше нет в операциях, переименовывается или убирается
+      if(k&&(it.subs||[]).some(x=>tkey(x)===k)&&!S.ops.some(o=>(o.to===it.id||o.from===it.id)&&tkey(o.tag)===k)){
+        const lay=(it.subLayer||{})[k];it.subs=it.subs.filter(x=>tkey(x)!==k);if(it.subLayer)delete it.subLayer[k];
+        if(dst.id===it.id&&nn&&!it.subs.some(x=>tkey(x)===tkey(nn))){it.subs.push(nn);if(lay){it.subLayer=it.subLayer||{};it.subLayer[tkey(nn)]=lay}}}
+      if(mk&&nn&&dst.g==='exp'){dst.subs=dst.subs||[];if(!dst.subs.some(x=>tkey(x)===tkey(nn)))dst.subs.push(nn)}
+      openTag=null;done('Изменено операций: '+fmt(n))};
+  };
+  draw();
+}
+
+/* ---------- свой CSV: выгрузка и загрузка ---------- */
+// Формат для Excel: разделитель «;», UTF-8 с BOM. Строки «Остаток» — начальные остатки счетов.
+function download(text,name,type){
+  const blob=new Blob([text],{type});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);
+}
+const csvCell=v=>{v=String(v==null?'':v);return /[;",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+function exportCsv(){
+  const L=['Дата;Тип;Откуда;Куда;Сумма;Метка;Комментарий'];
+  for(const it of S.items)if(it.g==='acc')L.push(['','Остаток','',it.name,it.start||0,'',''].map(csvCell).join(';'));
+  for(const o of S.ops){const a=byId(o.from)||{},b=byId(o.to)||{};
+    const t=a.g==='in'?'Доход':a.g==='acc'&&b.g==='acc'?'Перевод':a.g==='acc'&&b.g==='exp'?'Расход':a.g==='exp'?'Возврат':'';if(!t)continue;
+    L.push([o.d.slice(8)+'.'+o.d.slice(5,7)+'.'+o.d.slice(0,4),t,a.name,b.name,o.sum,o.tag||'',o.note||''].map(csvCell).join(';'))}
+  download('﻿'+L.join('\r\n'),'monetki-'+today()+'.csv','text/csv;charset=utf-8');
+}
+function readText(buf){try{return new TextDecoder('utf-8',{fatal:true}).decode(buf)}catch(e){return new TextDecoder('windows-1251').decode(buf)}}
+function importOwn(text){
+  text=text.replace(/^﻿/,'');
+  const first=text.split(/\r?\n/,1)[0],sep=(first.match(/;/g)||[]).length>=(first.match(/,/g)||[]).length?';':',';
+  const rows=parseCSV(text,sep),h=(rows[0]||[]).map(tkey),ix=n=>h.indexOf(n);
+  const c={d:ix('дата'),t:ix('тип'),f:ix('откуда'),to:ix('куда'),s:ix('сумма'),tag:ix('метка'),n:ix('комментарий')};
+  if(c.t<0||c.f<0||c.to<0||c.s<0||c.d<0)return null;
+  const old=S||blank(),N=blank();N.seq=Math.max(old.seq||1,1);
+  const by={in:{},acc:{},exp:{}},used=new Set();
+  const get=(g,name)=>{const k=tkey(name);if(by[g][k])return by[g][k];
+    const o=old.items.find(x=>x.g===g&&tkey(x.name)===k);   // знакомое название — сохраняем настройки
+    const it=o?Object.assign({},o,{name:name.trim()}):{id:'i'+(N.seq++).toString(36),g,name:name.trim(),icon:({in:'job',acc:'wallet',exp:'star'})[g]};
+    if(g==='acc'&&!o)it.start=0;if(g==='exp'&&!it.layer)it.layer='base';
+    by[g][k]=it;return it};
+  const num=v=>{v=String(v||'').replace(/[\s ₽]/g,'').replace(',','.');return v===''?NaN:Math.round(+v)};
+  const pdate=v=>{v=String(v||'').trim();let m=v.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/);
+    if(m)return (m[3].length===2?'20'+m[3]:m[3])+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+    m=v.match(/^(\d{4})-(\d{2})-(\d{2})/);return m?m[1]+'-'+m[2]+'-'+m[3]:null};
+  const oldKey={};for(const o of old.ops)oldKey[o.d+'|'+o.from+'|'+o.to+'|'+o.sum]=o;
+  let bad=0;
+  for(const r of rows.slice(1)){if(!r.some(x=>(x||'').trim()))continue;
+    const t=tkey(r[c.t]),f=(r[c.f]||'').trim(),to=(r[c.to]||'').trim(),s=num(r[c.s]);
+    if(t==='остаток'){if(to&&!isNaN(s)){const a=get('acc',to);a.start=s;used.add(a)}continue}
+    const d=pdate(r[c.d]);if(!d||!s||isNaN(s)||!f||!to){bad++;continue}
+    let a,b;
+    if(t==='доход'){a=get('in',f);b=get('acc',to)}
+    else if(t==='расход'){a=get('acc',f);b=get('exp',to)}
+    else if(t==='перевод'){a=get('acc',f);b=get('acc',to)}
+    else if(t==='возврат'){a=get('exp',f);b=get('acc',to)}
+    else{bad++;continue}
+    if(s<0)[a,b]=[b,a];
+    used.add(a);used.add(b);
+    const op={id:'o'+(N.seq++).toString(36),d,from:a.id,to:b.id,sum:Math.abs(s)};
+    const tag=c.tag>=0?(r[c.tag]||'').trim():'';if(tag)op.tag=tag;
+    const note=c.n>=0?(r[c.n]||'').trim():'';if(note)op.note=note;
+    const was=oldKey[d+'|'+a.id+'|'+b.id+'|'+op.sum];if(was){if(was.reg)op.reg=was.reg;if(was.reval)op.reval=true}
+    N.ops.push(op);
+  }
+  if(!N.ops.length)throw new Error('В файле не нашлось операций');
+  // порядок монет — как был; видимые, но пока пустые монеты остаются
+  for(const it of old.items)if(!it.hidden&&!used.has(by[it.g][tkey(it.name)])){const x=get(it.g,it.name);used.add(x)}
+  const pos=id=>{const i=old.items.findIndex(x=>x.id===id);return i<0?1e9:i};
+  N.items=[...used].sort((x,y)=>pos(x.id)-pos(y.id));
+  const ids=new Set(N.items.map(x=>x.id));
+  N.regular=(old.regular||[]).filter(r=>ids.has(r.from)&&ids.has(r.to));
+  N.ops.sort((x,y)=>x.d<y.d?-1:x.d>y.d?1:0);
+  N.bad=bad;return N;
+}
+// загрузка любого CSV: свой формат или CoinKeeper; текущая база заменяется только после подтверждения
+function confirmReplace(N,what){
+  const bad=N.bad||0;delete N.bad;
+  if(!S||!S.ops.length){S=N;persist();tab='coins';month=ym(today());render();toast('Загружено: '+fmt(N.ops.length)+' операций');return}
+  const cnt=g=>N.items.filter(x=>x.g===g).length;
+  $('panel').innerHTML='<div class="row"><b class="grow">Загрузить '+what+'?</b><button class="x" id="l-close" aria-label="Закрыть">✕</button></div>'+
+    '<div>В файле: <b>'+fmt(N.ops.length)+'</b> операций, '+cnt('exp')+' категорий, '+cnt('in')+' доходов, '+cnt('acc')+' счетов.'+(bad?' Пропущено строк: '+bad+'.':'')+'</div>'+
+    '<div class="notice">Текущая база ('+fmt(S.ops.length)+' операций) будет заменена. Если не уверен — сначала сохрани копию.</div>'+
+    '<button class="btn" id="l-backup">Сохранить копию текущей (JSON)</button><button class="btn primary" id="l-go">Заменить базу</button>';
+  $('sheet').hidden=false;$('l-close').onclick=closeSheet;$('l-backup').onclick=exportJson;
+  $('l-go').onclick=()=>{sortUndo=JSON.stringify(S);S=N;persist();closeSheet();tab='coins';month=ym(today());render();toast('Загружено: '+fmt(N.ops.length)+' операций')};
+}
 function exportJson(){
   const blob=new Blob([JSON.stringify(S)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='monetki-'+today()+'.json';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);
@@ -740,11 +919,11 @@ $('file-json').onchange=async e=>{const f=e.target.files[0];e.target.value='';if
   try{const s=JSON.parse(await f.text());if(!s||s.v!==1||!Array.isArray(s.ops))throw 0;S=s;persist();toast('Восстановлено: '+fmt(S.ops.length)+' операций');tab='coins';render()}catch(_){toast('Это не копия Монеток')}};
 
 /* ---------- импорт CoinKeeper ---------- */
-function parseCSV(text){
+function parseCSV(text,sep){sep=sep||',';
   const rows=[];let row=[],f='',q=false;
   for(let i=0;i<text.length;i++){const c=text[i];
     if(q){if(c==='"'){if(text[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
-    else if(c==='"')q=true;else if(c===','){row.push(f);f=''}else if(c==='\n'||c==='\r'){if(c==='\r'&&text[i+1]==='\n')i++;row.push(f);rows.push(row);row=[];f=''}else f+=c}
+    else if(c==='"')q=true;else if(c===sep){row.push(f);f=''}else if(c==='\n'||c==='\r'){if(c==='\r'&&text[i+1]==='\n')i++;row.push(f);rows.push(row);row=[];f=''}else f+=c}
   if(f||row.length){row.push(f);rows.push(row)}
   return rows;
 }
@@ -793,7 +972,8 @@ function importCK(text){
   return N;
 }
 $('file-csv').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
-  try{const N=importCK(await f.text());S=N;persist();tab='coins';month=ym(today());render();toast('Загружено: '+fmt(N.ops.length)+' операций')}
+  try{const text=readText(await f.arrayBuffer());const own=importOwn(text);
+    if(own)confirmReplace(own,'базу из CSV');else confirmReplace(importCK(text),'выгрузку CoinKeeper')}
   catch(err){toast(err.message||'Не удалось прочитать файл')}};
 $('fr-import').onclick=()=>$('file-csv').click();
 $('fr-empty').onclick=()=>{S=blank();
