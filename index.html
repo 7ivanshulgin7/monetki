@@ -18,7 +18,7 @@
   --accent:#0F6E64; --accent-ink:#FFFFFF; --accent-soft:#DCEFEB;
   --in:#6D52E8; --in-ink:#4B33C2; --acc:#EE8A3C; --acc-ink:#A04C0B; --acc-band:#FBFAF6; --exp:#13977F; --exp-ink:#0B6B59;
   --bar-in:#2E6FB0; --bar-exp:#E8833A; --good:#0F6E64; --bad:#B23A0A; --warn:#B4530A;
-  --l-obl:#2E5FA8; --l-base:#0F6E64; --l-irr:#B4530A; --l-hob:#7A3FB8;
+  --l-obl:#2a78d6; --l-base:#1baf7a; --l-irr:#eb6834; --l-hob:#6250d6;
   --display:"Unbounded","Golos Text",system-ui,sans-serif; --body:"Golos Text",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   color-scheme:light;
 }
@@ -27,7 +27,7 @@
   --accent:#3FB8A8; --accent-ink:#06201C; --accent-soft:#173632;
   --in:#7D66F0; --in-ink:#B3A6FF; --acc:#E88A40; --acc-ink:#F5B47E; --acc-band:#1C1F1E; --exp:#19A58B; --exp-ink:#6FD6C0;
   --bar-in:#6FA4E0; --bar-exp:#F0A060; --good:#4CC2A8; --bad:#F08A6A; --warn:#F0A060;
-  --l-obl:#7FA8E8; --l-base:#3FB8A8; --l-irr:#F0A060; --l-hob:#BE92F0;
+  --l-obl:#3987e5; --l-base:#199e70; --l-irr:#d95926; --l-hob:#9085e9;
   color-scheme:dark}}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;margin:0;background:var(--bg);color:var(--fg)}
@@ -103,6 +103,10 @@ nav button[aria-current="page"]{color:var(--accent);font-weight:600}
 .bars button{flex:1;min-width:0;height:100%;border:0;padding:0;background:transparent;border-radius:6px 6px 0 0;display:flex;align-items:flex-end;justify-content:center;gap:1px}
 .bars button[aria-pressed="true"]{background:var(--sunk)}
 .bars i{width:45%;border-radius:3px 3px 0 0;display:block}
+.tbars{display:flex;align-items:flex-end;gap:4px;height:130px;border-bottom:1px solid var(--line)}
+.tbars button{flex:1;min-width:0;height:100%;border:0;padding:0 1px;background:transparent;border-radius:6px 6px 0 0;display:flex;flex-direction:column-reverse;justify-content:flex-start;gap:2px}
+.tbars button[aria-pressed="true"]{background:var(--sunk)}
+.tbars i{display:block;width:100%;flex:none}.tbars i:last-child{border-radius:4px 4px 0 0}
 .blabels{display:flex;gap:4px}.blabels span{flex:1;text-align:center;font-size:10px;color:var(--muted)}
 .chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;min-height:34px}
 .chip[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);font-weight:600}
@@ -287,7 +291,7 @@ function regDone(r,month){return S.ops.some(o=>o.reg===r.id&&ym(o.d)===month)}
 function regActive(r,month){return !r.until||month<=r.until}
 
 /* ---------- состояние UI ---------- */
-let tab='coins', month=ym(today()), showIn=false, statMonth=ym(today());
+let typeSel=null;let tab='coins', month=ym(today()), showIn=false, statMonth=ym(today());
 
 function render(){
   applyLayerNames();
@@ -635,8 +639,27 @@ function renderStats(){
     if(expById[o.to]){const c=expById[o.to];addL(opLayer(o,c),dk(o,c),o.sum/full.length)}
     else if(expById[o.from]){const c=expById[o.from];addL(opLayer(o,c),dk(o,c),-o.sum/full.length)}}
   for(const k in lay)if(lay[k]<=0)delete lay[k];
+  // динамика типов за 12 месяцев: столбики из четырёх слоёв, нажатие показывает цифры месяца
+  const tm=ms.map(x=>{const r={};for(const o of S.ops){if(ym(o.d)!==x)continue;
+    if(expById[o.to]){const l=opLayer(o,expById[o.to]);r[l]=(r[l]||0)+o.sum}else if(expById[o.from]){const l=opLayer(o,expById[o.from]);r[l]=(r[l]||0)-o.sum}}
+    for(const k in r)if(r[k]<0)r[k]=0;return r});
+  // линии по типам: тонкие линии, точки на выбранном месяце, лёгкая сетка; нажатие на месяц показывает цифры
+  const LK=Object.keys(LAYERS).filter(k=>tm.some(r=>r[k]));
+  const tmax=Math.max(1,...tm.flatMap(r=>LK.map(k=>r[k]||0)));
+  const ti=typeSel==null?ms.length-1:typeSel,tr=tm[ti],tt=Object.values(tr).reduce((a,b)=>a+b,0);
+  const W=340,H=130,PL=30,PR=6,PT=8,PB=4,n=ms.length,X=i=>PL+i*(W-PL-PR)/(n-1),Y=v=>PT+(1-v/tmax)*(H-PT-PB);
+  const step=[5e3,1e4,2e4,25e3,5e4,1e5,2e5].find(st=>tmax/st<=4)||5e5,ticks=[];for(let v=0;v<=tmax;v+=step)ticks.push(v);
+  const kf=v=>v>=1000?Math.round(v/1000)+'к':String(v);
+  const svgc='<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="display:block;overflow:visible" role="img" aria-label="Траты по типам за 12 месяцев">'+
+    ticks.map(v=>'<line x1="'+PL+'" x2="'+(W-PR)+'" y1="'+Y(v)+'" y2="'+Y(v)+'" stroke="var(--line)" stroke-width="1"/><text x="'+(PL-5)+'" y="'+(Y(v)+3)+'" text-anchor="end" font-size="9" fill="var(--muted)">'+kf(v)+'</text>').join('')+
+    '<line x1="'+X(ti)+'" x2="'+X(ti)+'" y1="'+PT+'" y2="'+(H-PB)+'" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3"/>'+
+    LK.map(k=>'<polyline fill="none" stroke="var('+LAYERS[k].c+')" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="'+tm.map((r,i)=>X(i).toFixed(1)+','+Y(r[k]||0).toFixed(1)).join(' ')+'"/>').join('')+
+    LK.map(k=>'<circle cx="'+X(ti)+'" cy="'+Y(tr[k]||0)+'" r="4" fill="var('+LAYERS[k].c+')" stroke="var(--surface)" stroke-width="2"/>').join('')+
+    tm.map((r,i)=>'<rect data-tm="'+i+'" x="'+(X(i)-(W-PL-PR)/(n-1)/2)+'" y="0" width="'+((W-PL-PR)/(n-1))+'" height="'+H+'" fill="transparent" style="cursor:pointer"><title>'+monthLabel(ms[i])+'</title></rect>').join('')+'</svg>';
+  const tchart='<div class="row num" style="background:var(--sunk);border-radius:10px;padding:8px 10px;font-size:13px;flex-wrap:wrap;gap:4px 12px"><b style="flex:1 1 100%">'+monthLabel(ms[ti])+' · '+rub(tt)+'</b>'+LK.map(k=>'<span style="white-space:nowrap"><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var('+LAYERS[k].c+')"></i> '+LAYERS[k].n+' <b>'+fmt(tr[k]||0)+'</b></span>').join('')+'</div>'+
+    svgc+'<div style="display:flex;padding-left:'+(PL/W*100)+'%;padding-right:'+(PR/W*100)+'%">'+ms.map((x,i)=>'<span style="flex:1;text-align:center;font-size:10px;color:var(--muted);'+(i===0?'text-align:left;flex:.5':i===n-1?'text-align:right;flex:.5':'')+'">'+MON_S[+x.slice(5)-1]+'</span>').join('')+'</div>';
   const lsum=Object.values(lay).reduce((a,b)=>a+b,0)||1;
-  B.types=sec('types','Средний месяц по типам',rub(lsum),'<div style="display:flex;height:12px;border-radius:6px;overflow:hidden;gap:2px">'+Object.keys(LAYERS).filter(k=>lay[k]).map(k=>'<i style="width:'+(lay[k]/lsum*100)+'%;background:var('+LAYERS[k].c+')"></i>').join('')+'</div>'+
+  B.types=sec('types','Средний месяц по типам',rub(lsum),tchart+'<div class="sub" style="margin-top:4px">В среднем за '+full.length+' мес.</div><div style="display:flex;height:12px;border-radius:6px;overflow:hidden;gap:2px">'+Object.keys(LAYERS).filter(k=>lay[k]).map(k=>'<i style="width:'+(lay[k]/lsum*100)+'%;background:var('+LAYERS[k].c+')"></i>').join('')+'</div>'+
      Object.keys(LAYERS).filter(k=>lay[k]).map(k=>{const rows=Object.entries(det[k]||{}).filter(x=>x[1]>=1).sort((a,b)=>b[1]-a[1]);
        return '<details class="arch"><summary style="color:var(--fg);font-size:14px"><i style="width:10px;height:10px;border-radius:3px;flex:none;background:var('+LAYERS[k].c+')"></i><span class="grow">'+LAYERS[k].n+' <span class="sub">· '+Math.round(lay[k]/lsum*100)+'%</span></span><b class="num">'+rub(lay[k])+'</b><svg class="arr" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary><div class="archbody" style="gap:6px;padding-left:18px">'+
          rows.map(([n,v])=>'<div><div class="row" style="font-size:13px"><span class="grow">'+n+'</span><span class="num">'+rub(v)+'</span></div><div class="track" style="margin-top:3px;height:5px"><i style="width:'+(v/lay[k]*100)+'%;background:var('+LAYERS[k].c+')"></i></div></div>').join('')+'</div></details>'}).join('')+
@@ -646,6 +669,7 @@ function renderStats(){
   h+=statOrder.map(k=>B[k]||'').join('');
   $('stats').innerHTML=h;
   $('stats').querySelectorAll('details[data-asec]').forEach(d=>d.addEventListener('toggle',()=>{d.open?statOpen.add(d.dataset.asec):statOpen.delete(d.dataset.asec);try{localStorage.setItem('monetki.statOpen',JSON.stringify([...statOpen]))}catch(e){}}));
+  $('stats').querySelectorAll('[data-tm]').forEach(b=>b.onclick=()=>{typeSel=+b.dataset.tm;renderStats()});
   $('stats').querySelectorAll('[data-bar]').forEach(b=>b.onclick=()=>{statMonth=ms[+b.dataset.bar];renderStats()});
   $('s-order').onclick=()=>{statEdit=!statEdit;renderStats()};
   $('stats').querySelectorAll('[data-mv]').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();const i=statPos(b.dataset.mv),j=i+ +b.dataset.d;if(j<0||j>=statOrder.length)return;[statOrder[i],statOrder[j]]=[statOrder[j],statOrder[i]];try{localStorage.setItem('monetki.statOrder',JSON.stringify(statOrder))}catch(e){}renderStats()});
@@ -711,7 +735,7 @@ function catSpend(id,m){let s=0;for(const o of S.ops){if(ym(o.d)!==m)continue;if
 
 /* ---------- ещё ---------- */
 // Версия приложения: поднимать вместе с CACHE в sw.js — видно внизу «Ещё», пришло ли обновление
-const APP_VER='39 от 17.10.2026';
+const APP_VER='41 от 17.10.2026';
 // Подпись автора: знак T/V + itivan (inline SVG, цвет текста берётся из темы)
 const SIG='<svg class="sig" viewBox="0 2 229 80" role="img" aria-label="itivan" style="height:24px;width:auto;display:block;overflow:visible"><svg x="2" y="5" width="80" height="74" viewBox="40 0 220 160"><polyline class="vo" points="64,-20 150,172 236,-20" fill="none" stroke-width="42"/><polyline points="64,-20 150,172 236,-20" fill="none" stroke="#FF2E93" stroke-width="30"/><line x1="52" y1="15" x2="248" y2="15" stroke-width="50" style="stroke:var(--bg)"/><line x1="150" y1="0" x2="150" y2="170" stroke-width="50" style="stroke:var(--bg)"/><line x1="62" y1="15" x2="238" y2="15" stroke-width="30" style="stroke:currentColor"/><line x1="150" y1="0" x2="150" y2="160" stroke-width="30" style="stroke:currentColor"/></svg><path fill="currentColor" d="M102.6 55.6V50.5H109.8V39.9H103.6V34.7H115.2V50.5H121.2V55.6ZM112.1 31.4Q110.6 31.4 109.6 30.6Q108.7 29.8 108.7 28.5Q108.7 27.1 109.6 26.3Q110.6 25.5 112.1 25.5Q113.7 25.5 114.6 26.3Q115.5 27.1 115.5 28.5Q115.5 29.8 114.6 30.6Q113.7 31.4 112.1 31.4Z M134.9 55.6Q131.7 55.6 129.9 53.8Q128.1 52.0 128.1 48.8V39.9H122.6V34.7H128.1V28.8H133.8V34.7H141.6V39.9H133.8V48.8Q133.8 50.5 135.5 50.5H141.2V55.6Z M145.2 55.6V50.5H152.4V39.9H146.1V34.7H157.7V50.5H163.8V55.6ZM154.7 31.4Q153.1 31.4 152.2 30.6Q151.2 29.8 151.2 28.5Q151.2 27.1 152.2 26.3Q153.1 25.5 154.7 25.5Q156.2 25.5 157.2 26.3Q158.1 27.1 158.1 28.5Q158.1 29.8 157.2 30.6Q156.2 31.4 154.7 31.4Z M171.7 55.6 164.8 34.7H170.7L174.2 46.5Q174.5 47.5 174.8 48.8Q175.1 50.0 175.3 50.8Q175.5 50.0 175.7 48.8Q176.0 47.5 176.3 46.5L179.8 34.7H185.6L178.8 55.6Z M193.8 56.0Q190.6 56.0 188.8 54.3Q186.9 52.6 186.9 49.7Q186.9 46.5 189.1 44.8Q191.3 43.1 195.4 43.1H199.7V41.6Q199.7 40.4 198.9 39.6Q198.0 38.9 196.6 38.9Q195.3 38.9 194.4 39.5Q193.5 40.1 193.3 41.2H187.8Q188.1 38.0 190.6 36.2Q193.0 34.3 196.8 34.3Q200.8 34.3 203.1 36.3Q205.4 38.3 205.4 41.6V55.6H199.9V52.2H199.8Q199.5 53.7 198.3 54.6Q196.6 56.0 193.8 56.0ZM195.9 51.8Q197.6 51.8 198.7 50.9Q199.7 50.0 199.7 48.6V46.4H195.5Q194.2 46.4 193.4 47.1Q192.6 47.8 192.6 49.1Q192.6 50.3 193.5 51.1Q194.4 51.8 195.9 51.8Z M208.9 55.6V34.7H214.4V38.7H214.5Q214.8 37.0 215.9 35.9Q217.4 34.3 220.0 34.3Q223.0 34.3 224.9 36.5Q226.7 38.6 226.7 42.1V55.6H221.0V42.7Q221.0 41.1 220.2 40.2Q219.3 39.3 217.8 39.3Q216.2 39.3 215.4 40.2Q214.6 41.1 214.6 42.7V55.6Z"/></svg>';
 function renderMore(){
