@@ -72,6 +72,10 @@ button{cursor:pointer}
 .coin.hot .c{transform:scale(1.12);box-shadow:0 0 0 3px var(--surface),0 0 0 6px var(--fg)}
 .coin.add .c{border:2px dashed var(--line);background:transparent}
 .hint{text-align:center;font-size:12px;color:var(--muted);padding:16px 16px 20px}
+.guide{margin:14px 12px 20px;background:var(--surface);border-radius:14px;padding:4px 14px;font-size:13px;color:var(--fg)}
+.guide summary{list-style:none;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;padding:10px 0;font-weight:600;color:var(--muted)}
+.guide summary::-webkit-details-marker{display:none}.guide .arr{transition:transform .2s}.guide[open] .arr{transform:rotate(180deg)}
+.guide ol{margin:0 0 10px;padding-left:20px;display:flex;flex-direction:column;gap:7px;line-height:1.4}
 .ghost{position:fixed;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;border:3px solid #fff;box-shadow:0 6px 16px rgba(0,0,0,.3);pointer-events:none;z-index:50}
 /* nav */
 nav{flex:none;background:var(--surface);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:4px max(8px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px));position:relative;z-index:3}
@@ -113,6 +117,9 @@ nav button[aria-current="page"]{color:var(--accent);font-weight:600}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .field{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
 .field input,.field select{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 10px;min-height:42px;color:var(--fg);font-size:15px}
+.esel select{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:6px 8px;min-height:38px;color:var(--fg);font-size:14px;min-width:0}
+.echip{display:inline-flex;align-items:center;gap:6px}.echip i{width:8px;height:8px;border-radius:2px;flex:none}
+.edate{gap:6px}.edate input{flex:1;min-width:0;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:6px 8px;min-height:36px;color:var(--fg);font-size:14px}
 .two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 /* sheet */
 .sheet{position:fixed;inset:0;z-index:40;background:rgba(10,14,16,.5);display:flex;align-items:flex-end;justify-content:center}
@@ -120,9 +127,10 @@ nav button[aria-current="page"]{color:var(--accent);font-weight:600}
 .pair{flex:1;display:flex;align-items:center;gap:6px;font-weight:600;font-size:14px;min-width:0;flex-wrap:wrap}
 .pair span{color:#fff;border-radius:10px;padding:6px 10px}
 .x{width:44px;height:44px;border:0;border-radius:12px;background:var(--sunk);flex:none;display:flex;align-items:center;justify-content:center}
-.amount{font-family:var(--display);font-size:34px;font-weight:600;text-align:center;padding:2px 0}
+.amount{font-family:var(--display);font-size:32px;font-weight:600;text-align:center;padding:2px 0}
 .keys{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-.keys button{height:50px;border:0;border-radius:14px;background:var(--sunk);font-size:20px;font-weight:500}
+.keys button{height:46px;border:0;border-radius:14px;background:var(--sunk);font-size:20px;font-weight:500}
+@media (max-height:740px){.keys button{height:40px}.amount{font-size:28px}.panel{gap:9px}}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;z-index:60;max-width:90%;text-align:center}
 details.card{gap:0}
 details.card summary{list-style:none;display:flex;align-items:center;gap:10px;cursor:pointer;min-height:28px}
@@ -189,7 +197,20 @@ details.arch .archbody{display:flex;flex-direction:column;gap:8px;padding-top:6p
       <div class="band in" id="band-in" hidden><div class="hscroll" id="g-in"></div></div>
       <div class="band acc"><div class="hscroll" id="g-acc"></div></div>
       <div class="band"><div class="grid" id="g-exp"></div></div>
-      <div class="hint">Перетащи монету: доход → счёт → расход. Нажатие — быстрый ввод, долгое нажатие — порядок и настройки.</div>
+      <details class="guide">
+        <summary><span>😏 Кто не читал — тот лох</span><svg class="arr" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
+        <ol>
+          <li><b>Нажми на монету</b> — быстрая запись: сумма, подкатегория, дата.</li>
+          <li><b>Перетащи монету</b>: доход → счёт — пришли деньги, счёт → счёт — перевод, счёт → расход — трата.</li>
+          <li><b>Зажми монету</b> — двигать в ряду, настройки, скрыть в архив. «+» в конце ряда — новая монета.</li>
+          <li><b>Подкатегории</b> окрашены по типу трат: Фикс, Быт, Переменные, Для души. По ним аналитика показывает, что можно урезать.</li>
+          <li><b>Стрелка справа вверху</b> — показать доходы. <b>⋯ слева</b> — настройки, разбор истории, копии.</li>
+          <li><b>История</b>: нажми на операцию, чтобы исправить или удалить.</li>
+          <li><b>Платежи</b> — регулярные траты, отмечаются в один тап.</li>
+          <li><b>Вклад и брокер</b> переоценивай, когда напомнит, — разница уйдёт в Активы или Убытки.</li>
+          <li><b>Всё хранится только в телефоне.</b> Раз в месяц: ⋯ → Данные → Сохранить копию.</li>
+        </ol>
+      </details>
       </div>
     </div>
   </section>
@@ -403,6 +424,8 @@ $('coins-scroll').addEventListener('click',e=>{const a=e.target.closest('.coin[d
 document.addEventListener('pointermove',e=>{
   if(!drag)return;
   if(!drag.moved&&Math.abs(e.clientX-drag.x)+Math.abs(e.clientY-drag.y)>8){
+    // монеты расходов никуда не тянутся: движение пальцем — это просто прокрутка
+    if(byId(drag.id).g==='exp'){clearTimeout(drag.lp);drag=null;return}
     drag.moved=true;clearTimeout(drag.lp);drag.el.classList.add('src');
     const g=document.createElement('div');g.className='ghost';g.style.background=colorVar[byId(drag.id).g];document.body.appendChild(g);drag.ghost=g;
   }
@@ -460,11 +483,14 @@ function renderEntry(){
   const y=new Date();y.setDate(y.getDate()-1);const yd=y.toISOString().slice(0,10);
   $('panel').innerHTML=(E.edit?'<div class="sub" style="text-align:center">Изменение операции</div>':'')+(a&&a.g==='acc'&&!b&&!E.edit?'<button class="btn" id="e-reval">'+(a.reval?'Переоценить ':'Сверить остаток: ')+esc(a.name)+'</button>':'')+
    '<div class="row"><div class="pair"><span style="background:'+(a?colorVar[a.g]:'var(--muted)')+'">'+esc(a?a.name:'Откуда?')+'</span>→<span style="background:'+(b?colorVar[b.g]:'var(--muted)')+'">'+esc(b?b.name:'Куда?')+'</span></div><button class="x" id="e-close" aria-label="Закрыть">✕</button></div>'+
-   '<div class="two"><label class="field">Откуда<select id="e-from">'+(a?'':'<option value="">—</option>')+opts(fromG,E.from)+'</select></label><label class="field">Куда<select id="e-to">'+(b?'':'<option value="">—</option>')+opts(toG,E.to)+'</select></label></div>'+
+   '<div class="two esel"><select id="e-from" aria-label="Откуда">'+(a?'':'<option value="">Откуда?</option>')+opts(fromG,E.from)+'</select><select id="e-to" aria-label="Куда">'+(b?'':'<option value="">Куда?</option>')+opts(toG,E.to)+'</select></div>'+
    '<div class="amount num" id="e-amt">'+(E.amount?Number(E.amount).toLocaleString('ru-RU'):'0')+' ₽</div>'+
-   (tags.length?'<div class="field">Подкатегория<div class="chips" id="e-tags">'+tags.map(t=>'<button class="chip" aria-pressed="'+(E.tag.toLowerCase()===t.toLowerCase())+'" data-tag="'+esc(t)+'">'+esc(t)+'</button>').join('')+'</div></div>':'')+
-   '<label class="field">Дата<input id="e-date" type="date" value="'+E.d+'" max="'+today()+'"></label>'+
-   '<div class="chips"><button class="chip" data-d="'+today()+'" aria-pressed="'+(E.d===today())+'">Сегодня</button><button class="chip" data-d="'+yd+'" aria-pressed="'+(E.d===yd)+'">Вчера</button></div>'+
+   // подкатегории с цветом типа; «Без подкатегории» — тип самой категории
+   (b&&b.g==='exp'?(()=>{const lt=t=>(t&&(b.subLayer||{})[t.toLowerCase()])||b.layer||'base',cur=lt(E.tag);
+     const chip=(t,l)=>'<button class="chip echip" aria-pressed="'+((E.tag||'').toLowerCase()===t.toLowerCase())+'" data-tag="'+esc(t)+'"><i style="background:var('+LAYERS[lt(t)].c+')"></i>'+esc(l)+'</button>';
+     return '<div class="chips">'+(tags.length?chip('','Без подкатегории'):'')+tags.map(t=>chip(t,t)).join('')+'</div>'+
+       '<div class="sub" style="display:flex;align-items:center;gap:6px;margin-top:-4px"><i style="width:8px;height:8px;border-radius:2px;background:var('+LAYERS[cur].c+')"></i>Тип: '+LAYERS[cur].n+'</div>'})():'')+
+   '<div class="row edate"><button class="chip" data-d="'+today()+'" aria-pressed="'+(E.d===today())+'">Сегодня</button><button class="chip" data-d="'+yd+'" aria-pressed="'+(E.d===yd)+'">Вчера</button><input id="e-date" type="date" value="'+E.d+'" max="'+today()+'" aria-label="Дата"></div>'+
    '<div class="keys">'+['1','2','3','4','5','6','7','8','9','00','0','⌫'].map(k=>'<button data-k="'+k+'">'+k+'</button>').join('')+'</div>'+
    '<button class="btn primary" id="e-save">'+(E.edit?'Сохранить изменения':'Записать')+'</button>'+
    (E.edit?'<button class="btn danger" id="o-del">Удалить операцию</button><button class="btn" id="o-del-yes" hidden>Точно удалить</button>':'');
@@ -673,7 +699,7 @@ function renderStats(){
     tm.map((r,i)=>'<rect data-tm="'+i+'" x="'+(X(i)-(W-PL-PR)/Math.max(1,n-1)/2)+'" y="0" width="'+((W-PL-PR)/Math.max(1,n-1))+'" height="'+H+'" fill="transparent" style="cursor:pointer"><title>'+monthLabel(tms[i])+'</title></rect>').join('')+'</svg>';
   const tchart='<div class="row num" style="background:var(--sunk);border-radius:10px;padding:8px 10px;font-size:13px;flex-wrap:wrap;gap:4px 12px"><b style="flex:1 1 100%">'+monthLabel(tms[ti])+' · '+rub(tt)+'</b>'+LK.map(k=>'<span style="white-space:nowrap"><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var('+LAYERS[k].c+')"></i> '+LAYERS[k].n+' <b>'+fmt(tr[k]||0)+'</b></span>').join('')+'</div>'+
     svgc+'<div style="position:relative;height:14px;margin:0 '+(PR/W*100)+'% 0 '+(PL/W*100)+'%">'+tms.map((x,i)=>{const show=n<=12||x.slice(5)==='01';if(!show)return '';const lbl=n<=12?MON_S[+x.slice(5)-1]:x.slice(0,4);return '<span style="position:absolute;left:'+(n>1?i/(n-1)*100:0)+'%;transform:translateX('+(i===0?'0':i===n-1?'-100%':'-50%')+');font-size:10px;color:var(--muted);white-space:nowrap">'+lbl+'</span>'}).join('')+'</div>'+
-    '<div class="chips" style="justify-content:center">'+[[3,'3 мес.'],[12,'12 мес.'],[0,'Всё время']].map(([v,l])=>'<button class="chip" data-tspan="'+v+'" aria-pressed="'+(typeSpan===v)+'">'+l+'</button>').join('')+'</div>';
+    '<div class="chips" style="justify-content:center">'+[[6,'6 мес.'],[12,'12 мес.'],[0,'Всё время']].map(([v,l])=>'<button class="chip" data-tspan="'+v+'" aria-pressed="'+(typeSpan===v)+'">'+l+'</button>').join('')+'</div>';
   const lsum=Object.values(lay).reduce((a,b)=>a+b,0)||1;
   B.types=sec('types','Средний месяц по типам',rub(lsum),tchart+'<div class="sub" style="margin-top:4px">В среднем за '+full.length+' мес.</div><div style="display:flex;height:12px;border-radius:6px;overflow:hidden;gap:2px">'+Object.keys(LAYERS).filter(k=>lay[k]).map(k=>'<i style="width:'+(lay[k]/lsum*100)+'%;background:var('+LAYERS[k].c+')"></i>').join('')+'</div>'+
      Object.keys(LAYERS).filter(k=>lay[k]).map(k=>{const rows=Object.entries(det[k]||{}).filter(x=>x[1]>=1).sort((a,b)=>b[1]-a[1]);
@@ -752,7 +778,7 @@ function catSpend(id,m){let s=0;for(const o of S.ops){if(ym(o.d)!==m)continue;if
 
 /* ---------- ещё ---------- */
 // Версия приложения: поднимать вместе с CACHE в sw.js — видно внизу «Ещё», пришло ли обновление
-const APP_VER='43 от 17.10.2026';
+const APP_VER='46 от 17.10.2026';
 // Подпись автора: знак T/V + itivan (inline SVG, цвет текста берётся из темы)
 const SIG='<svg class="sig" viewBox="0 2 229 80" role="img" aria-label="itivan" style="height:24px;width:auto;display:block;overflow:visible"><svg x="2" y="5" width="80" height="74" viewBox="40 0 220 160"><polyline class="vo" points="64,-20 150,172 236,-20" fill="none" stroke-width="42"/><polyline points="64,-20 150,172 236,-20" fill="none" stroke="#FF2E93" stroke-width="30"/><line x1="52" y1="15" x2="248" y2="15" stroke-width="50" style="stroke:var(--bg)"/><line x1="150" y1="0" x2="150" y2="170" stroke-width="50" style="stroke:var(--bg)"/><line x1="62" y1="15" x2="238" y2="15" stroke-width="30" style="stroke:currentColor"/><line x1="150" y1="0" x2="150" y2="160" stroke-width="30" style="stroke:currentColor"/></svg><path fill="currentColor" d="M102.6 55.6V50.5H109.8V39.9H103.6V34.7H115.2V50.5H121.2V55.6ZM112.1 31.4Q110.6 31.4 109.6 30.6Q108.7 29.8 108.7 28.5Q108.7 27.1 109.6 26.3Q110.6 25.5 112.1 25.5Q113.7 25.5 114.6 26.3Q115.5 27.1 115.5 28.5Q115.5 29.8 114.6 30.6Q113.7 31.4 112.1 31.4Z M134.9 55.6Q131.7 55.6 129.9 53.8Q128.1 52.0 128.1 48.8V39.9H122.6V34.7H128.1V28.8H133.8V34.7H141.6V39.9H133.8V48.8Q133.8 50.5 135.5 50.5H141.2V55.6Z M145.2 55.6V50.5H152.4V39.9H146.1V34.7H157.7V50.5H163.8V55.6ZM154.7 31.4Q153.1 31.4 152.2 30.6Q151.2 29.8 151.2 28.5Q151.2 27.1 152.2 26.3Q153.1 25.5 154.7 25.5Q156.2 25.5 157.2 26.3Q158.1 27.1 158.1 28.5Q158.1 29.8 157.2 30.6Q156.2 31.4 154.7 31.4Z M171.7 55.6 164.8 34.7H170.7L174.2 46.5Q174.5 47.5 174.8 48.8Q175.1 50.0 175.3 50.8Q175.5 50.0 175.7 48.8Q176.0 47.5 176.3 46.5L179.8 34.7H185.6L178.8 55.6Z M193.8 56.0Q190.6 56.0 188.8 54.3Q186.9 52.6 186.9 49.7Q186.9 46.5 189.1 44.8Q191.3 43.1 195.4 43.1H199.7V41.6Q199.7 40.4 198.9 39.6Q198.0 38.9 196.6 38.9Q195.3 38.9 194.4 39.5Q193.5 40.1 193.3 41.2H187.8Q188.1 38.0 190.6 36.2Q193.0 34.3 196.8 34.3Q200.8 34.3 203.1 36.3Q205.4 38.3 205.4 41.6V55.6H199.9V52.2H199.8Q199.5 53.7 198.3 54.6Q196.6 56.0 193.8 56.0ZM195.9 51.8Q197.6 51.8 198.7 50.9Q199.7 50.0 199.7 48.6V46.4H195.5Q194.2 46.4 193.4 47.1Q192.6 47.8 192.6 49.1Q192.6 50.3 193.5 51.1Q194.4 51.8 195.9 51.8Z M208.9 55.6V34.7H214.4V38.7H214.5Q214.8 37.0 215.9 35.9Q217.4 34.3 220.0 34.3Q223.0 34.3 224.9 36.5Q226.7 38.6 226.7 42.1V55.6H221.0V42.7Q221.0 41.1 220.2 40.2Q219.3 39.3 217.8 39.3Q216.2 39.3 215.4 40.2Q214.6 41.1 214.6 42.7V55.6Z"/></svg>';
 function renderMore(){
