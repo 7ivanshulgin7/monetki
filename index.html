@@ -60,7 +60,7 @@ button{cursor:pointer}
 .hscroll::-webkit-scrollbar{display:none}
 .hscroll .coin{flex:0 0 23.5%;scroll-snap-align:start;touch-action:pan-x}
 .hscroll.few .coin{flex-basis:25%}
-.coin{display:flex;flex-direction:column;align-items:center;gap:5px;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;border:0;background:transparent;padding:0}
+.coin{-webkit-touch-callout:none;display:flex;flex-direction:column;align-items:center;gap:5px;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;border:0;background:transparent;padding:0}
 .coin .nm{font-size:12px;color:var(--muted);max-width:84px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .coin .c{width:60px;height:60px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:transform .12s,box-shadow .12s}
 .coin .s{font-size:13px;font-weight:600}
@@ -183,7 +183,7 @@ details.arch .archbody{display:flex;flex-direction:column;gap:8px;padding-top:6p
       <div class="band in" id="band-in" hidden><div class="hscroll" id="g-in"></div></div>
       <div class="band acc"><div class="hscroll" id="g-acc"></div></div>
       <div class="band"><div class="grid" id="g-exp"></div></div>
-      <div class="hint">Перетащи монету: доход → счёт → расход. Нажатие — быстрый ввод.</div>
+      <div class="hint">Перетащи монету: доход → счёт → расход. Нажатие — быстрый ввод, долгое нажатие — порядок и настройки.</div>
       </div>
     </div>
   </section>
@@ -384,13 +384,15 @@ $('coins-scroll').addEventListener('pointerdown',e=>{
   const el=e.target.closest('.coin');if(!el)return;
   if(el.dataset.add)return;  // «+» открывается по клику, чтобы свайп ряда его не срабатывал
   drag={id:el.dataset.id,x:e.clientX,y:e.clientY,moved:false,el,ghost:null,hot:null};
+  // долгое нажатие (0,5 с без движения) — меню монеты: порядок, настройки, скрыть
+  drag.lp=setTimeout(()=>{if(drag&&!drag.moved){const id=drag.id;endDrag(null,true);if(navigator.vibrate)navigator.vibrate(15);openCoinMenu(id)}},500);
   el.setPointerCapture&&el.setPointerCapture(e.pointerId);
 });
 $('coins-scroll').addEventListener('click',e=>{const a=e.target.closest('.coin[data-add]');if(a)openItemEdit(null,a.dataset.add)});
 document.addEventListener('pointermove',e=>{
   if(!drag)return;
   if(!drag.moved&&Math.abs(e.clientX-drag.x)+Math.abs(e.clientY-drag.y)>8){
-    drag.moved=true;drag.el.classList.add('src');
+    drag.moved=true;clearTimeout(drag.lp);drag.el.classList.add('src');
     const g=document.createElement('div');g.className='ghost';g.style.background=colorVar[byId(drag.id).g];document.body.appendChild(g);drag.ghost=g;
   }
   if(!drag.moved)return;
@@ -402,7 +404,7 @@ document.addEventListener('pointermove',e=>{
   if(ok)ok.classList.add('hot');drag.hot=ok;
 },{passive:false});
 function endDrag(e,cancel){
-  if(!drag)return;const d=drag;drag=null;
+  if(!drag)return;const d=drag;drag=null;clearTimeout(d.lp);
   d.el.classList.remove('src');if(d.ghost)d.ghost.remove();if(d.hot)d.hot.classList.remove('hot');
   if(cancel)return;
   const a=byId(d.id);
@@ -411,6 +413,21 @@ function endDrag(e,cancel){
 }
 document.addEventListener('pointerup',e=>endDrag(e,false));
 document.addEventListener('pointercancel',e=>endDrag(e,true));
+$('coins-scroll').addEventListener('contextmenu',e=>{if(e.target.closest('.coin'))e.preventDefault()});
+function openCoinMenu(id){
+  const it=byId(id);
+  const draw=()=>{const sh=S.items.filter(x=>x.g===it.g&&!x.hidden),i=sh.indexOf(it);
+    $('panel').innerHTML='<div class="row"><b class="grow">'+esc(it.name)+'</b><button class="x" id="cm-close" aria-label="Закрыть">✕</button></div>'+
+      '<div class="sub">Место в ряду: '+(i+1)+' из '+sh.length+'</div>'+
+      '<div class="row" style="gap:8px"><button class="btn grow" id="cm-l"'+(i<=0?' disabled':'')+'>‹ Левее</button><button class="btn grow" id="cm-r"'+(i>=sh.length-1?' disabled':'')+'>Правее ›</button></div>'+
+      '<button class="btn" id="cm-edit">Настройки</button><button class="btn" id="cm-hide">Скрыть с экрана</button>';
+    $('cm-close').onclick=closeSheet;
+    const move=d=>{const nb=sh[i+d];if(!nb)return;const a=S.items.indexOf(it),c=S.items.indexOf(nb);S.items[a]=nb;S.items[c]=it;persist();render();draw()};
+    $('cm-l').onclick=()=>move(-1);$('cm-r').onclick=()=>move(1);
+    $('cm-edit').onclick=()=>openItemEdit(id);
+    $('cm-hide').onclick=()=>{it.hidden=true;persist();closeSheet();render();toast('«'+it.name+'» в архиве — вернуть можно в «Ещё»')}};
+  draw();$('sheet').hidden=false;
+}
 function defAcc(){const a=S.items.filter(x=>x.g==='acc'&&!x.hidden);return (a.find(x=>/карт/i.test(x.name))||a[0]||{}).id}
 
 /* ---------- ввод операции ---------- */
@@ -661,7 +678,7 @@ function catSpend(id,m){let s=0;for(const o of S.ops){if(ym(o.d)!==m)continue;if
 
 /* ---------- ещё ---------- */
 // Версия приложения: поднимать вместе с CACHE в sw.js — видно внизу «Ещё», пришло ли обновление
-const APP_VER='30 от 17.10.2026';
+const APP_VER='32 от 17.10.2026';
 // Подпись автора: знак T/V + itivan (inline SVG, цвет текста берётся из темы)
 const SIG='<svg class="sig" viewBox="0 2 229 80" role="img" aria-label="itivan" style="height:24px;width:auto;display:block;overflow:visible"><svg x="2" y="5" width="80" height="74" viewBox="40 0 220 160"><polyline class="vo" points="64,-20 150,172 236,-20" fill="none" stroke-width="42"/><polyline points="64,-20 150,172 236,-20" fill="none" stroke="#FF2E93" stroke-width="30"/><line x1="52" y1="15" x2="248" y2="15" stroke-width="50" style="stroke:var(--bg)"/><line x1="150" y1="0" x2="150" y2="170" stroke-width="50" style="stroke:var(--bg)"/><line x1="62" y1="15" x2="238" y2="15" stroke-width="30" style="stroke:currentColor"/><line x1="150" y1="0" x2="150" y2="160" stroke-width="30" style="stroke:currentColor"/></svg><path fill="currentColor" d="M102.6 55.6V50.5H109.8V39.9H103.6V34.7H115.2V50.5H121.2V55.6ZM112.1 31.4Q110.6 31.4 109.6 30.6Q108.7 29.8 108.7 28.5Q108.7 27.1 109.6 26.3Q110.6 25.5 112.1 25.5Q113.7 25.5 114.6 26.3Q115.5 27.1 115.5 28.5Q115.5 29.8 114.6 30.6Q113.7 31.4 112.1 31.4Z M134.9 55.6Q131.7 55.6 129.9 53.8Q128.1 52.0 128.1 48.8V39.9H122.6V34.7H128.1V28.8H133.8V34.7H141.6V39.9H133.8V48.8Q133.8 50.5 135.5 50.5H141.2V55.6Z M145.2 55.6V50.5H152.4V39.9H146.1V34.7H157.7V50.5H163.8V55.6ZM154.7 31.4Q153.1 31.4 152.2 30.6Q151.2 29.8 151.2 28.5Q151.2 27.1 152.2 26.3Q153.1 25.5 154.7 25.5Q156.2 25.5 157.2 26.3Q158.1 27.1 158.1 28.5Q158.1 29.8 157.2 30.6Q156.2 31.4 154.7 31.4Z M171.7 55.6 164.8 34.7H170.7L174.2 46.5Q174.5 47.5 174.8 48.8Q175.1 50.0 175.3 50.8Q175.5 50.0 175.7 48.8Q176.0 47.5 176.3 46.5L179.8 34.7H185.6L178.8 55.6Z M193.8 56.0Q190.6 56.0 188.8 54.3Q186.9 52.6 186.9 49.7Q186.9 46.5 189.1 44.8Q191.3 43.1 195.4 43.1H199.7V41.6Q199.7 40.4 198.9 39.6Q198.0 38.9 196.6 38.9Q195.3 38.9 194.4 39.5Q193.5 40.1 193.3 41.2H187.8Q188.1 38.0 190.6 36.2Q193.0 34.3 196.8 34.3Q200.8 34.3 203.1 36.3Q205.4 38.3 205.4 41.6V55.6H199.9V52.2H199.8Q199.5 53.7 198.3 54.6Q196.6 56.0 193.8 56.0ZM195.9 51.8Q197.6 51.8 198.7 50.9Q199.7 50.0 199.7 48.6V46.4H195.5Q194.2 46.4 193.4 47.1Q192.6 47.8 192.6 49.1Q192.6 50.3 193.5 51.1Q194.4 51.8 195.9 51.8Z M208.9 55.6V34.7H214.4V38.7H214.5Q214.8 37.0 215.9 35.9Q217.4 34.3 220.0 34.3Q223.0 34.3 224.9 36.5Q226.7 38.6 226.7 42.1V55.6H221.0V42.7Q221.0 41.1 220.2 40.2Q219.3 39.3 217.8 39.3Q216.2 39.3 215.4 40.2Q214.6 41.1 214.6 42.7V55.6Z"/></svg>';
 function renderMore(){
@@ -673,7 +690,10 @@ function renderMore(){
       // скрытые не мешают: уходят в сворачиваемый «Архив» с числом
       const row=x=>'<button class="op" style="background:var(--sunk)" data-item="'+x.id+'"><span class="grow">'+esc(x.name)+'</span>'+(g==='exp'?'<span class="sub">'+LAYERS[x.layer||'base'].n+'</span>':g==='acc'&&x.reval?'<span class="sub">переоценка</span>':'')+'</button>';
       const arch=list.filter(x=>x.hidden);
-      h+=sec(g,t,vis+' на экране'+(arch.length?' · архив '+arch.length:''),list.filter(x=>!x.hidden).map(row).join('')+'<button class="btn small" data-new="'+g+'">Добавить</button>'+
+      // режим «Порядок»: стрелки двигают монету в ряду главного экрана
+      const shown=list.filter(x=>!x.hidden),ed=orderEdit===g;
+      const mv=(x,i)=>'<div class="op" style="background:var(--sunk)"><span class="grow">'+esc(x.name)+'</span>'+[[-1,'M6 15l6-6 6 6','Левее'],[1,'M6 9l6 6 6-6','Правее']].map(([d,pa,l])=>'<button class="mv" data-ord="'+x.id+'" data-d="'+d+'" aria-label="'+l+'"'+(i+d<0||i+d>=shown.length?' disabled':'')+'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="'+pa+'"/></svg></button>').join('')+'</div>';
+      h+=sec(g,t,vis+' на экране'+(arch.length?' · архив '+arch.length:''),(ed?shown.map(mv).join(''):shown.map(row).join(''))+'<div class="row" style="gap:8px"><button class="btn small grow" data-new="'+g+'">Добавить</button>'+(shown.length>1?'<button class="btn small grow" data-orde="'+g+'">'+(ed?'Готово':'Порядок')+'</button>':'')+'</div>'+
         (arch.length?'<details class="arch"'+(openSecs.has('arch-'+g)?' open':'')+' data-sec="arch-'+g+'"><summary><svg class="arr" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg><span class="grow">Архив</span><b class="num">'+arch.length+'</b></summary><div class="archbody">'+arch.map(row).join('')+'</div></details>':''));
     }
   }
@@ -686,11 +706,14 @@ function renderMore(){
   $('more').querySelectorAll('details').forEach(d=>d.addEventListener('toggle',()=>{d.open?openSecs.add(d.dataset.sec):openSecs.delete(d.dataset.sec)}));
   $('more').querySelectorAll('[data-item]').forEach(b=>b.onclick=()=>openItemEdit(b.dataset.item));
   $('more').querySelectorAll('[data-new]').forEach(b=>b.onclick=()=>openItemEdit(null,b.dataset.new));
+  $('more').querySelectorAll('[data-orde]').forEach(b=>b.onclick=()=>{orderEdit=orderEdit===b.dataset.orde?null:b.dataset.orde;renderMore()});
+  $('more').querySelectorAll('[data-ord]').forEach(b=>b.onclick=()=>{const it=byId(b.dataset.ord),sh=S.items.filter(x=>x.g===it.g&&!x.hidden),i=sh.indexOf(it),nb=sh[i+ +b.dataset.d];if(!nb)return;
+    const a=S.items.indexOf(it),c=S.items.indexOf(nb);S.items[a]=nb;S.items[c]=it;persist();render()});
   if($('m-sort')){$('m-sort').onclick=()=>openSort();$('m-csvout').onclick=exportCsv}
   $('m-export').onclick=exportJson;$('m-restore').onclick=()=>$('file-json').click();$('m-csv').onclick=()=>$('file-csv').click();
 }
 // Свёрнутые разделы настроек; открытые запоминаются, пока приложение открыто
-const openSecs=new Set();
+const openSecs=new Set();let orderEdit=null;
 function sec(key,title,meta,body){
   return '<details class="card" data-sec="'+key+'"'+(openSecs.has(key)?' open':'')+'><summary><h2 class="grow">'+title+'</h2><span class="sub">'+meta+'</span><svg class="arr" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary><div class="secbody">'+body+'</div></details>';
 }
