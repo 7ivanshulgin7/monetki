@@ -76,13 +76,15 @@ button{cursor:pointer}
 .guide{margin:14px 12px 20px;background:var(--surface);border-radius:14px;padding:4px 14px;font-size:13px;color:var(--fg)}
 .guide summary{list-style:none;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;padding:10px 0;font-weight:600;color:var(--muted)}
 .guide summary::-webkit-details-marker{display:none}.guide .arr{transition:transform .2s}.guide[open] .arr{transform:rotate(180deg)}
-#msum{margin:10px 12px 0;padding:9px 14px 10px;gap:5px!important;background:var(--surface);border:1px solid var(--line);border-radius:16px;display:flex;flex-direction:column;gap:8px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+#msum{margin:10px 12px 0;padding:9px 14px 10px;gap:5px!important;background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:16px;display:flex;flex-direction:column;gap:8px;cursor:pointer;-webkit-tap-highlight-color:transparent}
 #msum:active{transform:scale(.99)}
 .ms-head{display:flex;align-items:center;justify-content:space-between}.ms-head .arr{color:var(--muted)}
-.ms-main{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}.ms-main b{font-size:22px}.ms-main span{font-size:13px}
+.ms-main{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}.ms-main b{font-size:22px}
+#msum .ms-main b{font-size:18px;font-weight:600;color:var(--fg)}#msum .track{height:4px}#msum .ms-tips{color:var(--muted)}#msum .ms-tips b{color:var(--fg);font-weight:600}.ms-main span{font-size:13px}
 .ms-tips{display:flex;flex-direction:column;gap:5px;padding-top:7px;border-top:1px solid var(--line);font-size:13px;line-height:1.3}
 .ms-tips div{display:flex;gap:8px;align-items:center}.ms-tips svg{flex:none}.ms-tips .grow{flex:1;min-width:0}
 .ms-btn{border:0;border-radius:8px;padding:5px 10px;font:inherit;font-size:13px;font-weight:600;background:var(--sunk);color:var(--fg);white-space:nowrap;cursor:pointer}.ms-btn.pr{background:var(--accent);color:var(--accent-ink)}
+#msum .ms-btn{background:transparent;border:1px solid var(--line);color:var(--fg);font-weight:500;padding:4px 10px}#msum .ms-btn.pr{border-color:var(--accent);color:var(--accent)}
 .card.rich{display:flex;flex-direction:column;gap:8px}
 .ms-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}.ms-two div{display:flex;flex-direction:column;gap:1px}.ms-two b{font-size:22px}
 .ms-lay{display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px}
@@ -148,6 +150,7 @@ nav button[aria-current="page"]{color:var(--accent);font-weight:600}
 .hfilt{position:relative;display:flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:14px;max-width:55%}
 .hfilt span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.hfilt.on{border-color:var(--accent);background:var(--accent-soft);font-weight:600}
 .hfilt select{position:absolute;inset:0;opacity:0;width:100%;font-size:16px}
+.tlink{cursor:pointer}.tlink .tarr{flex:none;color:var(--muted)}
 .hsum{font-size:14px;padding:2px 2px 4px}
 .hlink{border:0;background:transparent;color:var(--muted);font:inherit;font-size:14px;padding:6px;align-self:center;cursor:pointer}
 .chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;min-height:34px}
@@ -515,7 +518,7 @@ function monthFacts(m){
   if(soon)tips.push(['pay',(soon.day===day?'Сегодня':soon.day-day===1?'Завтра':soon.day+'-го')+' — '+esc(soon.name)+' <b class="num">'+rub(soon.sum)+'</b>']);
   if(prev.length){const part=(id,x)=>{let s=0;for(const o of S.ops){if(ym(o.d)!==x||+o.d.slice(8)>day)continue;if(o.to===id)s+=o.sum;if(o.from===id)s-=o.sum}return s};
     const g=Object.values(exp).map(c=>({c,d:catSpend(c.id,m)-prev.reduce((a,x)=>a+part(c.id,x),0)/prev.length})).filter(x=>x.d>Math.max(1000,now*.05)).sort((a,b)=>b.d-a.d)[0];
-    if(g)tips.push(['up',esc(g.c.name)+' — больше обычного на <b class="num">'+rub(Math.round(g.d/100)*100)+'</b>','var(--l-irr)'])}
+    if(g)tips.push(['up',esc(g.c.name)+' — больше обычного на <b class="num">'+rub(Math.round(g.d/100)*100)+'</b>','var(--l-irr)','dyn:'+g.c.id])}
   if(isCur&&usual&&fullUsual&&left>1){const fc=Math.round((now+(fullUsual-usual)*Math.min(1.5,Math.max(.5,now/usual)))/100)*100;tips.push(['fc','К концу месяца — около <b class="num">'+rub(fc)+'</b>',fc>fullUsual*1.05?'var(--bad)':null])}
   if(isCur){const td=S.ops.filter(o=>o.d===today()&&exp[o.to]).reduce((a,o)=>a+o.sum,0);if(td)tips.push(['today','Сегодня потрачено <b class="num">'+rub(td)+'</b>'])}
   if(isCur){const st=streak();if(st>=3)tips.push(['fire','<b>'+st+'</b> '+(st%10===1&&st%100!==11?'день':st%10>=2&&st%10<=4&&(st%100<10||st%100>=20)?'дня':'дней')+' подряд всё записано','#f08c2a'])}
@@ -526,7 +529,7 @@ function monthFacts(m){
     if(exp[o.to]){const l=opLayer(o,exp[o.to]);lay[l]=(lay[l]||0)+o.sum}else if(exp[o.from]){const l=opLayer(o,exp[o.from]);lay[l]=(lay[l]||0)-o.sum}}
   return {m,isCur,day,now,usual,inc,fullUsual,tips,r,verdict,vcol,lay};
 }
-const tipRow=(ic,html,col,btns)=>'<div><svg width="18" height="18" viewBox="0 0 256 256" fill="'+(col||'var(--accent)')+'" aria-hidden="true">'+MS_IC[ic]+'</svg><span class="grow">'+html+'</span>'+(btns||'')+'</div>';
+const tipRow=(ic,html,col,btns,act)=>'<div'+(act?' class="tlink" data-act="'+act+'"':'')+'><svg width="18" height="18" viewBox="0 0 256 256" fill="'+(col||'var(--accent)')+'" aria-hidden="true">'+MS_IC[ic]+'</svg><span class="grow">'+html+'</span>'+(btns||'')+(act?'<svg class="tarr" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>':'')+'</div>';
 // главный экран: одна цифра, полоска и до 3 строк; дела (вчера пусто, копия, переоценка) идут первыми
 function renderMsum(cm){
   const el=$('msum');
@@ -536,14 +539,15 @@ function renderMsum(cm){
   const bkDays=S.lastBackup?daysBetween(S.lastBackup,today()):null,needBk=S.ops.length>30&&(bkDays==null||bkDays>30)&&snooze<=today();
   const B=(id,l,pr)=>'<button class="ms-btn'+(pr?' pr':'')+'" data-act="'+id+'">'+l+'</button>';
   const acts=[];
-  if(gap)acts.push(tipRow('today','Вчера пусто','var(--accent)',B('n-add','Записать',1)+B('n-quiet','Не тратил')));
-  for(const x of revalDue())acts.push(tipRow('up','Переоценить <b>'+esc(x.it.name)+'</b>',null,B('rv:'+x.it.id,'Переоценить',1)));
+  const MU='var(--muted)';
+  if(gap)acts.push(tipRow('today','Вчера пусто',MU,B('n-add','Записать',1)+B('n-quiet','Не тратил')));
+  for(const x of revalDue())acts.push(tipRow('up','Переоценить <b>'+esc(x.it.name)+'</b>',MU,B('rv:'+x.it.id,'Переоценить',1)));
   if(needBk)acts.push(tipRow('day',bkDays==null?'Копии базы ещё нет':'Копия '+bkDays+' дн. назад','var(--bad)',B('bk-save','Сохранить',1)+B('bk-later','Позже')));
   if(!F.now&&!F.inc&&!acts.length){el.hidden=true;return}el.hidden=false;
-  const rows=acts.concat(F.tips.map(t=>tipRow(t[0],t[1],t[2]))).slice(0,Math.max(3,acts.length));
+  const rows=acts.concat(F.tips.map(t=>tipRow(t[0],t[1],t[2]==='var(--bad)'?t[2]:MU,'',t[3]))).slice(0,Math.max(3,acts.length));
   el.innerHTML='<div class="ms-head"><span class="sub">'+monthLabel(cm).split(' ')[0]+', потрачено</span><svg class="arr" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></div>'+
-    '<div class="ms-main"><b class="num">'+rub(F.now)+'</b>'+(F.verdict?'<span style="color:'+F.vcol+'">'+F.verdict+'</span>':'')+'</div>'+
-    (F.usual?'<div class="track"><i style="width:'+Math.min(100,F.r*100)+'%;background:'+(F.r>1.05?'var(--bad)':'var(--accent)')+'"></i></div>':'')+
+    '<div class="ms-main"><b class="num">'+rub(F.now)+'</b>'+(F.verdict?'<span style="color:'+(F.r>1.05?'var(--bad)':MU)+'">'+F.verdict+'</span>':'')+'</div>'+
+    (F.usual?'<div class="track"><i style="width:'+Math.min(100,F.r*100)+'%;background:'+(F.r>1.05?'var(--bad)':'var(--muted)')+';opacity:.7"></i></div>':'')+
     (rows.length?'<div class="ms-tips">'+rows.join('')+'</div>':'');
   el.onclick=e=>{const b=e.target.closest('[data-act]');
     if(b){e.stopPropagation();const a=b.dataset.act;
@@ -552,9 +556,29 @@ function renderMsum(cm){
       else if(a==='bk-save'){exportJson();render();toast('Копия сохранена в загрузки')}
       else if(a==='bk-later'){try{localStorage.setItem('monetki.bkSnooze',addDays(today(),7))}catch(e){}render()}
       else if(a.startsWith('rv:'))openReval(a.slice(3));
+      else if(a.startsWith('dyn:'))openDyn(a.slice(4));
       return}
     statMonth=cm;statDetail=false;tab='stats';render()};
   el.onkeydown=e=>{if(e.target===el&&(e.key==='Enter'||e.key===' ')){e.preventDefault();statMonth=cm;statDetail=false;tab='stats';render()}};
+}
+// средние показатели и топ категорий месяца
+function avgCard(m){
+  const cm=ym(today()),isCur=m===cm,day=isCur?+today().slice(8):new Date(+m.slice(0,4),+m.slice(5),0).getDate();
+  const prev=[1,2,3,4,5,6].map(k=>addMonth(m,-k)).filter(x=>S.ops.some(o=>ym(o.d)===x));
+  if(!prev.length)return '';
+  const n=prev.length,aE=prev.reduce((a,x)=>a+monthSpend(x),0)/n,aI=prev.reduce((a,x)=>a+monthIncome(x),0)/n,aN=aI-aE;
+  const dimOf=x=>new Date(+x.slice(0,4),+x.slice(5),0).getDate();
+  const perDay=monthSpend(m)/day,usualDay=prev.reduce((a,x)=>a+monthSpend(x)/dimOf(x),0)/n;
+  const plus=prev.filter(x=>monthIncome(x)>=monthSpend(x)).length;
+  const cats=S.items.filter(x=>x.g==='exp').map(c=>({c,v:catSpend(c.id,m),a:prev.reduce((s,x)=>s+catSpend(c.id,x),0)/n})).filter(x=>x.v>0).sort((a,b)=>b.v-a.v).slice(0,3);
+  const cmax=Math.max(1,...cats.map(x=>Math.max(x.v,x.a)));
+  const row=(l,v,col)=>'<div><span>'+l+'</span><b class="num"'+(col?' style="color:'+col+'"':'')+'>'+v+'</b></div>';
+  return '<div class="card rich"><h2 style="margin:0">Обычно за месяц <span class="sub" style="font-weight:400">· среднее за '+n+' мес.</span></h2>'+
+    '<div class="ms-rows">'+row('Тратишь',rub(aE))+row('Зарабатываешь',rub(aI))+row(aN>=0?'Остаётся':'Не хватает',(aN>=0?'+':'−')+rub(Math.abs(aN)),aN>=0?'var(--good)':'var(--bad)')+
+      row('В день сейчас',rub(perDay)+' <span class="sub" style="font-weight:400">· обычно '+fmt(usualDay)+'</span>',perDay>usualDay*1.1?'var(--bad)':null)+
+      row('Месяцев в плюсе',plus+' из '+n)+'</div>'+
+    (cats.length?'<div class="sub" style="margin-top:2px">Больше всего в этом месяце</div>'+cats.map(x=>'<div class="tlink" data-act="dyn:'+x.c.id+'" style="display:flex;flex-direction:column;gap:3px"><div class="row" style="font-size:14px"><span class="grow">'+esc(x.c.name)+'</span><span class="num"><b>'+rub(x.v)+'</b> <span class="sub">/ '+fmt(x.a)+'</span></span></div><div class="track" style="height:5px"><i style="width:'+(x.a/cmax*100)+'%;background:var(--sunk);filter:brightness(.85)"></i><i style="width:'+(x.v/cmax*100)+'%;background:'+(x.v>x.a*1.05?'var(--bad)':'var(--accent)')+'"></i></div></div>').join('')+'<div class="sub">сейчас / в среднем · нажми, чтобы увидеть по месяцам</div>':'')+
+    '</div>';
 }
 // аналитика по-простому: та же сводка, но подробнее; «Духота» открывает все блоки
 function richSummary(m){
@@ -565,8 +589,8 @@ function richSummary(m){
     (F.verdict?'<div style="font-size:13px;color:'+F.vcol+'">'+F.verdict+(F.isCur?' к этому числу':'')+'</div>':'')+
     (LK.length?'<div class="ms-lay">'+LK.map(k=>'<i style="width:'+(F.lay[k]/lt*100)+'%;background:var('+LAYERS[k].c+')"></i>').join('')+'</div><div class="ms-leg">'+LK.map(k=>'<span><i style="background:var('+LAYERS[k].c+')"></i>'+LAYERS[k].n+' <b class="num">'+fmt(F.lay[k])+'</b></span>').join('')+'</div>':'')+
     '<div class="ms-rows"><div><span>Доходы</span><b class="num" style="color:var(--good)">+'+rub(F.inc)+'</b></div><div><span>Итог месяца</span><b class="num" style="color:'+(net>=0?'var(--good)':'var(--bad)')+'">'+(net>=0?'+':'−')+rub(Math.abs(net))+'</b></div></div>'+
-    (F.tips.length?'<div class="ms-tips">'+F.tips.map(t=>tipRow(t[0],t[1],t[2])).join('')+'</div>':'')+
-    '</div><button class="btn" id="s-detail" style="width:100%;margin-top:4px">🤓 Духота — все цифры и графики</button>';
+    (F.tips.length?'<div class="ms-tips">'+F.tips.map(t=>tipRow(t[0],t[1],t[2],'',t[3])).join('')+'</div>':'')+
+    '</div>'+avgCard(m)+'<button class="btn" id="s-detail" style="width:100%;margin-top:4px">🤓 Духота — все цифры и графики</button>';
 }
 function renderCoins(){
   const first=!S;$('first-run').hidden=!first;$('bands').hidden=first;
@@ -898,7 +922,8 @@ function renderStats(){
     $('stats').innerHTML='<h1>Аналитика</h1><div class="month" style="padding:0"><button id="s-prev" aria-label="Предыдущий месяц">‹</button><b>'+monthLabel(m)+'</b><button id="s-next" aria-label="Следующий месяц"'+(isCur?' disabled':'')+'>›</button></div>'+richSummary(m);
     $('s-prev').onclick=()=>{statMonth=addMonth(statMonth,-1);renderStats()};
     $('s-next').onclick=()=>{if(!isCur){statMonth=addMonth(statMonth,1);renderStats()}};
-    $('s-detail').onclick=()=>{setDetail(true);renderStats()};return}
+    $('s-detail').onclick=()=>{setDetail(true);renderStats()};
+    $('stats').querySelectorAll('[data-act^="dyn:"]').forEach(x=>x.onclick=()=>openDyn(x.dataset.act.slice(4)));return}
   let h='<h1 style="display:flex;align-items:center;gap:8px"><span style="flex:1">Аналитика</span>'+(S&&S.ops.length&&!statEdit?'<button id="s-simple" class="btn small" style="font-size:14px">Попроще</button>':'')+(S&&S.ops.length?'<button id="s-order" class="btn small" style="font-size:14px" aria-pressed="'+statEdit+'">'+(statEdit?'Готово':'Порядок')+'</button>':'')+'</h1>';const B={};
   if(!S||!S.ops.length){$('stats').innerHTML=h+'<div class="empty">Появится, когда будут операции.</div>';return}
   const cur=ym(today()),m=statMonth,isCur=m===cur,day=isCur?+today().slice(8):31;
@@ -1041,8 +1066,10 @@ function drawDyn(){
    '<div class="two"><div><div class="sub">В среднем в месяц</div><b class="num" style="font-size:17px">'+rub(avg)+'</b><div class="sub">пунктир на графике</div></div>'+
    '<div><div class="sub">Последние 3 мес.</div><b class="num" style="font-size:17px">'+rub(s3)+'</b>'+(trend==null?'':'<div class="sub" style="color:'+(trend>0?'var(--bad)':'var(--good)')+'">'+(trend>0?'+':'')+trend+'% к трём до них</div>')+'</div></div>'+
    (tags.length&&!D.tag?'<div class="field">Метки за период<div class="chips">'+tags.map(([t,v])=>'<button class="chip" data-dt="'+esc(t)+'">'+esc(td[t])+' · '+fmt(v/1000)+'к</button>').join('')+'</div></div>':'')+
+   '<button class="btn" id="d-ops">Операции за '+monthLabel(ms[sel]).toLowerCase()+' ›</button>'+
    (D.tag?'<button class="btn" id="d-all">Вся категория «'+esc(c.name)+'»</button>':'');
   $('d-close').onclick=closeSheet;
+  $('d-ops').onclick=()=>{histCat=D.cat;month=ms[sel];closeSheet();tab='hist';render()};
   $('panel').querySelectorAll('[data-span]').forEach(b=>b.onclick=()=>{D.span=+b.dataset.span;D.sel=null;drawDyn()});
   $('panel').querySelectorAll('[data-dm]').forEach(b=>b.onclick=()=>{D.sel=+b.dataset.dm;drawDyn()});
   $('panel').querySelectorAll('[data-dt]').forEach(b=>b.onclick=()=>{D.tag=b.dataset.dt;D.sel=null;drawDyn()});
@@ -1054,7 +1081,7 @@ function catSpend(id,m){let s=0;for(const o of S.ops){if(ym(o.d)!==m)continue;if
 
 /* ---------- ещё ---------- */
 // Версия приложения: поднимать вместе с CACHE в sw.js — видно внизу «Ещё», пришло ли обновление
-const APP_VER='65 от 18.10.2026';
+const APP_VER='67 от 18.10.2026';
 // Подпись автора: знак T/V + itivan (inline SVG, цвет текста берётся из темы)
 const SIG='<svg class="sig" viewBox="0 2 229 80" role="img" aria-label="itivan" style="height:24px;width:auto;display:block;overflow:visible"><svg x="2" y="5" width="80" height="74" viewBox="40 0 220 160"><polyline class="vo" points="64,-20 150,172 236,-20" fill="none" stroke-width="42"/><polyline points="64,-20 150,172 236,-20" fill="none" stroke="#FF2E93" stroke-width="30"/><line x1="52" y1="15" x2="248" y2="15" stroke-width="50" style="stroke:var(--bg)"/><line x1="150" y1="0" x2="150" y2="170" stroke-width="50" style="stroke:var(--bg)"/><line x1="62" y1="15" x2="238" y2="15" stroke-width="30" style="stroke:currentColor"/><line x1="150" y1="0" x2="150" y2="160" stroke-width="30" style="stroke:currentColor"/></svg><path fill="currentColor" d="M102.6 55.6V50.5H109.8V39.9H103.6V34.7H115.2V50.5H121.2V55.6ZM112.1 31.4Q110.6 31.4 109.6 30.6Q108.7 29.8 108.7 28.5Q108.7 27.1 109.6 26.3Q110.6 25.5 112.1 25.5Q113.7 25.5 114.6 26.3Q115.5 27.1 115.5 28.5Q115.5 29.8 114.6 30.6Q113.7 31.4 112.1 31.4Z M134.9 55.6Q131.7 55.6 129.9 53.8Q128.1 52.0 128.1 48.8V39.9H122.6V34.7H128.1V28.8H133.8V34.7H141.6V39.9H133.8V48.8Q133.8 50.5 135.5 50.5H141.2V55.6Z M145.2 55.6V50.5H152.4V39.9H146.1V34.7H157.7V50.5H163.8V55.6ZM154.7 31.4Q153.1 31.4 152.2 30.6Q151.2 29.8 151.2 28.5Q151.2 27.1 152.2 26.3Q153.1 25.5 154.7 25.5Q156.2 25.5 157.2 26.3Q158.1 27.1 158.1 28.5Q158.1 29.8 157.2 30.6Q156.2 31.4 154.7 31.4Z M171.7 55.6 164.8 34.7H170.7L174.2 46.5Q174.5 47.5 174.8 48.8Q175.1 50.0 175.3 50.8Q175.5 50.0 175.7 48.8Q176.0 47.5 176.3 46.5L179.8 34.7H185.6L178.8 55.6Z M193.8 56.0Q190.6 56.0 188.8 54.3Q186.9 52.6 186.9 49.7Q186.9 46.5 189.1 44.8Q191.3 43.1 195.4 43.1H199.7V41.6Q199.7 40.4 198.9 39.6Q198.0 38.9 196.6 38.9Q195.3 38.9 194.4 39.5Q193.5 40.1 193.3 41.2H187.8Q188.1 38.0 190.6 36.2Q193.0 34.3 196.8 34.3Q200.8 34.3 203.1 36.3Q205.4 38.3 205.4 41.6V55.6H199.9V52.2H199.8Q199.5 53.7 198.3 54.6Q196.6 56.0 193.8 56.0ZM195.9 51.8Q197.6 51.8 198.7 50.9Q199.7 50.0 199.7 48.6V46.4H195.5Q194.2 46.4 193.4 47.1Q192.6 47.8 192.6 49.1Q192.6 50.3 193.5 51.1Q194.4 51.8 195.9 51.8Z M208.9 55.6V34.7H214.4V38.7H214.5Q214.8 37.0 215.9 35.9Q217.4 34.3 220.0 34.3Q223.0 34.3 224.9 36.5Q226.7 38.6 226.7 42.1V55.6H221.0V42.7Q221.0 41.1 220.2 40.2Q219.3 39.3 217.8 39.3Q216.2 39.3 215.4 40.2Q214.6 41.1 214.6 42.7V55.6Z"/></svg>';
 function renderMore(){
