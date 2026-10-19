@@ -173,6 +173,10 @@ nav button[aria-current="page"]{color:var(--accent);font-weight:600}
 .icgrid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px;padding:0 0 10px}
 .icb{aspect-ratio:1;border:1px solid transparent;border-radius:10px;background:var(--sunk);color:var(--fg);display:grid;place-items:center;padding:0}.icb[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
 .dows{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-top:4px}.dows .chip{padding:6px 0;min-height:34px}
+.sic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:none;margin-right:2px}
+.sic.four{grid-template-columns:1fr 1fr;gap:3px;padding:7px;background:var(--sunk)}.sic.four i{width:100%;aspect-ratio:1;border-radius:3px}
+.ltrow{display:flex;gap:10px;align-items:flex-start}.ltrow>i{width:14px;height:14px;border-radius:4px;flex:none;margin-top:14px}
+.ltrow input{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 10px;min-height:42px;color:var(--fg);font-size:15px;font-weight:600}.ltrow .sub{margin:4px 2px 0;font-size:12.5px}
 .smh{display:flex;align-items:center;gap:8px}.smh b{font-size:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .smed{flex:none;width:34px;height:34px;border:0;border-radius:10px;background:var(--sunk);color:var(--muted);display:grid;place-items:center}
 .smg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
@@ -953,6 +957,12 @@ function openReval(id){
 
 /* ---------- перетаскивание ---------- */
 let drag=null;
+// лёгкая вибрация: Android — vibrate; айфон (Safari 18+) — через скрытый переключатель, который iOS «щёлкает» сам
+const HAPTIC=(()=>{let lbl=null;
+  return (ms)=>{try{if(navigator.vibrate){navigator.vibrate(ms||10);return}
+    if(!IOS)return;if(!lbl){lbl=document.createElement('label');lbl.style.cssText='position:fixed;left:-99px;top:0;width:1px;height:1px;opacity:0;pointer-events:none';
+      const i=document.createElement('input');i.type='checkbox';i.setAttribute('switch','');lbl.appendChild(i);document.body.appendChild(lbl)}
+    lbl.click()}catch(e){}}})();
 function canMove(a,b){if(!a||!b||a.id===b.id)return false;return (a.g==='in'&&b.g==='acc')||(a.g==='acc'&&b.g==='acc')||(a.g==='acc'&&b.g==='exp')}
 const colorVar={in:'var(--in)',acc:'var(--acc)',exp:'var(--exp)'};
 $('coins-scroll').addEventListener('pointerdown',e=>{
@@ -960,7 +970,7 @@ $('coins-scroll').addEventListener('pointerdown',e=>{
   if(el.dataset.add)return;  // «+» открывается по клику, чтобы свайп ряда его не срабатывал
   drag={id:el.dataset.id,x:e.clientX,y:e.clientY,moved:false,el,ghost:null,hot:null};
   // долгое нажатие (0,5 с без движения) — меню монеты: порядок, настройки, скрыть
-  drag.lp=setTimeout(()=>{if(drag&&!drag.moved){const id=drag.id;endDrag(null,true);if(navigator.vibrate)navigator.vibrate(15);openCoinMenu(id)}},500);
+  drag.lp=setTimeout(()=>{if(drag&&!drag.moved){const id=drag.id;endDrag(null,true);HAPTIC(20);openCoinMenu(id)}},500);
   el.setPointerCapture&&el.setPointerCapture(e.pointerId);
 });
 $('coins-scroll').addEventListener('click',e=>{const a=e.target.closest('.coin[data-add]');if(a)openItemEdit(null,a.dataset.add)});
@@ -969,7 +979,7 @@ document.addEventListener('pointermove',e=>{
   if(!drag.moved&&Math.abs(e.clientX-drag.x)+Math.abs(e.clientY-drag.y)>8){
     // монеты расходов никуда не тянутся: движение пальцем — это просто прокрутка
     if(byId(drag.id).g==='exp'){clearTimeout(drag.lp);drag=null;return}
-    drag.moved=true;clearTimeout(drag.lp);drag.el.classList.add('src');
+    drag.moved=true;clearTimeout(drag.lp);drag.el.classList.add('src');HAPTIC(12);
     const g=document.createElement('div');g.className='ghost';g.style.background=colorVar[byId(drag.id).g];document.body.appendChild(g);drag.ghost=g;
   }
   if(!drag.moved)return;
@@ -978,6 +988,7 @@ document.addEventListener('pointermove',e=>{
   const t=document.elementFromPoint(e.clientX,e.clientY),c=t&&t.closest('.coin[data-id]');
   const ok=c&&canMove(byId(drag.id),byId(c.dataset.id))?c:null;
   if(drag.hot&&drag.hot!==ok)drag.hot.classList.remove('hot');
+  if(ok&&ok!==drag.hot)HAPTIC(8);
   if(ok)ok.classList.add('hot');drag.hot=ok;
 },{passive:false});
 function endDrag(e,cancel){
@@ -985,8 +996,8 @@ function endDrag(e,cancel){
   d.el.classList.remove('src');if(d.ghost)d.ghost.remove();if(d.hot)d.hot.classList.remove('hot');
   if(cancel)return;
   const a=byId(d.id);
-  if(!d.moved){const pair=a.g==='in'?[a.id,defAcc()]:a.g==='acc'?[a.id,null]:[defAcc(),a.id];openEntry(pair[0],pair[1],a.g==='acc'?{pivot:a.id}:null);return}
-  if(d.hot)openEntry(a.id,d.hot.dataset.id);
+  if(!d.moved){HAPTIC(8);const pair=a.g==='in'?[a.id,defAcc()]:a.g==='acc'?[a.id,null]:[defAcc(),a.id];openEntry(pair[0],pair[1],a.g==='acc'?{pivot:a.id}:null);return}
+  if(d.hot){HAPTIC(15);openEntry(a.id,d.hot.dataset.id)}
 }
 document.addEventListener('pointerup',e=>endDrag(e,false));
 document.addEventListener('pointercancel',e=>endDrag(e,true));
@@ -1083,10 +1094,10 @@ function renderEntry(){
     if(nw&&nw.g==='in'){if(!E.to&&was&&was.g==='acc')E.to=was.id;const t=byId(E.to);if(t&&t.g!=='acc')E.to=was&&was.g==='acc'?was.id:defAcc();E.tag=''}
     if(E.to===E.from)E.to=null;renderEntry()};
   $('e-to').onchange=e=>{E.to=e.target.value;E.tag='';renderEntry()};}
-  $('panel').querySelectorAll('[data-k]').forEach(k=>k.onclick=()=>{E.amount=calcKey(E.amount,k.dataset.k);$('e-amt').innerHTML=amtHtml(E.amount)});
+  $('panel').querySelectorAll('[data-k]').forEach(k=>k.onclick=()=>{HAPTIC(6);E.amount=calcKey(E.amount,k.dataset.k);$('e-amt').innerHTML=amtHtml(E.amount)});
   $('panel').querySelectorAll('[data-tag]').forEach(c=>c.onclick=()=>{keepFields();E.tag=E.tag.toLowerCase()===c.dataset.tag.toLowerCase()?'':c.dataset.tag;renderEntry()});
   if($('e-addsub')){const ab=$('e-addsub');let lt=null,longed=false;
-    ab.addEventListener('pointerdown',()=>{longed=false;lt=setTimeout(()=>{longed=true;if(navigator.vibrate)navigator.vibrate(15);showTree(ab.dataset.cat)},550)});
+    ab.addEventListener('pointerdown',()=>{longed=false;lt=setTimeout(()=>{longed=true;HAPTIC(20);showTree(ab.dataset.cat)},550)});
     ['pointerup','pointerleave','pointercancel'].forEach(ev=>ab.addEventListener(ev,()=>clearTimeout(lt)));
     ab.addEventListener('contextmenu',e=>e.preventDefault());
     ab.addEventListener('click',e=>{if(longed){e.stopImmediatePropagation();e.preventDefault()}},true)}
@@ -1420,7 +1431,7 @@ function catSpend(id,m){let s=0;for(const o of S.ops){if(ym(o.d)!==m)continue;if
 
 /* ---------- ещё ---------- */
 // Версия приложения: поднимать вместе с CACHE в sw.js — видно внизу «Ещё», пришло ли обновление
-const APP_VER='85 от 19.10.2026';
+const APP_VER='87 от 19.10.2026';
 // Подпись автора: знак T/V + itivan (inline SVG, цвет текста берётся из темы)
 const SIG='<svg class="sig" viewBox="0 2 229 80" role="img" aria-label="itivan" style="height:24px;width:auto;display:block;overflow:visible"><svg x="2" y="5" width="80" height="74" viewBox="40 0 220 160"><polyline class="vo" points="64,-20 150,172 236,-20" fill="none" stroke-width="42"/><polyline points="64,-20 150,172 236,-20" fill="none" stroke="#FF2E93" stroke-width="30"/><line x1="52" y1="15" x2="248" y2="15" stroke-width="50" style="stroke:var(--bg)"/><line x1="150" y1="0" x2="150" y2="170" stroke-width="50" style="stroke:var(--bg)"/><line x1="62" y1="15" x2="238" y2="15" stroke-width="30" style="stroke:currentColor"/><line x1="150" y1="0" x2="150" y2="160" stroke-width="30" style="stroke:currentColor"/></svg><path fill="currentColor" d="M102.6 55.6V50.5H109.8V39.9H103.6V34.7H115.2V50.5H121.2V55.6ZM112.1 31.4Q110.6 31.4 109.6 30.6Q108.7 29.8 108.7 28.5Q108.7 27.1 109.6 26.3Q110.6 25.5 112.1 25.5Q113.7 25.5 114.6 26.3Q115.5 27.1 115.5 28.5Q115.5 29.8 114.6 30.6Q113.7 31.4 112.1 31.4Z M134.9 55.6Q131.7 55.6 129.9 53.8Q128.1 52.0 128.1 48.8V39.9H122.6V34.7H128.1V28.8H133.8V34.7H141.6V39.9H133.8V48.8Q133.8 50.5 135.5 50.5H141.2V55.6Z M145.2 55.6V50.5H152.4V39.9H146.1V34.7H157.7V50.5H163.8V55.6ZM154.7 31.4Q153.1 31.4 152.2 30.6Q151.2 29.8 151.2 28.5Q151.2 27.1 152.2 26.3Q153.1 25.5 154.7 25.5Q156.2 25.5 157.2 26.3Q158.1 27.1 158.1 28.5Q158.1 29.8 157.2 30.6Q156.2 31.4 154.7 31.4Z M171.7 55.6 164.8 34.7H170.7L174.2 46.5Q174.5 47.5 174.8 48.8Q175.1 50.0 175.3 50.8Q175.5 50.0 175.7 48.8Q176.0 47.5 176.3 46.5L179.8 34.7H185.6L178.8 55.6Z M193.8 56.0Q190.6 56.0 188.8 54.3Q186.9 52.6 186.9 49.7Q186.9 46.5 189.1 44.8Q191.3 43.1 195.4 43.1H199.7V41.6Q199.7 40.4 198.9 39.6Q198.0 38.9 196.6 38.9Q195.3 38.9 194.4 39.5Q193.5 40.1 193.3 41.2H187.8Q188.1 38.0 190.6 36.2Q193.0 34.3 196.8 34.3Q200.8 34.3 203.1 36.3Q205.4 38.3 205.4 41.6V55.6H199.9V52.2H199.8Q199.5 53.7 198.3 54.6Q196.6 56.0 193.8 56.0ZM195.9 51.8Q197.6 51.8 198.7 50.9Q199.7 50.0 199.7 48.6V46.4H195.5Q194.2 46.4 193.4 47.1Q192.6 47.8 192.6 49.1Q192.6 50.3 193.5 51.1Q194.4 51.8 195.9 51.8Z M208.9 55.6V34.7H214.4V38.7H214.5Q214.8 37.0 215.9 35.9Q217.4 34.3 220.0 34.3Q223.0 34.3 224.9 36.5Q226.7 38.6 226.7 42.1V55.6H221.0V42.7Q221.0 41.1 220.2 40.2Q219.3 39.3 217.8 39.3Q216.2 39.3 215.4 40.2Q214.6 41.1 214.6 42.7V55.6Z"/></svg>';
 function renderMore(){
@@ -1444,9 +1455,9 @@ function renderMore(){
         (arch.length?'<details class="arch"'+(openSecs.has('arch-'+g)?' open':'')+' data-sec="arch-'+g+'"><summary><svg class="arr" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg><span class="grow">Архив</span><b class="num">'+arch.length+'</b></summary><div class="archbody">'+arch.map(row).join('')+'</div></details>':''));
     }
   }
-  if(S)h+=sec('ltypes','Типы трат',Object.keys(LAYERS).map(k=>LAYERS[k].n).join(' · '),
-     '<div class="sub">Каждой категории и подкатегории задаётся тип — по нему аналитика делит траты. Названия можно поменять.</div>'+
-     Object.keys(LAYERS).map(k=>'<label class="row" style="gap:10px"><i style="width:12px;height:12px;border-radius:4px;flex:none;background:var('+LAYERS[k].c+')"></i><input data-ln="'+k+'" value="'+esc(LAYERS[k].n)+'" maxlength="20" style="flex:1;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 10px;min-height:42px;color:var(--fg);font-size:15px"></label>').join('')+
+  if(S)h+=sec('ltypes','Типы трат','',
+     '<div class="sub">У каждой категории и подкатегории есть тип. По нему аналитика показывает, какие траты обязательные, а какие можно урезать. Название типа можно поменять.</div>'+
+     Object.keys(LAYERS).map(k=>'<div class="ltrow"><i style="background:var('+LAYERS[k].c+')"></i><div class="grow"><input data-ln="'+k+'" value="'+esc(LAYERS[k].n)+'" maxlength="20"><div class="sub">'+LAYER_HINT[k]+'</div></div></div>').join('')+
      '<button class="btn" id="m-ln">Сохранить названия</button>');
   if(pushOk()){const st=pushSt(),on=!!st.id,tm=st.time||'21:00';
     h+=sec('push','Напоминание вечером',on?'в '+tm:'выкл.',
@@ -1482,8 +1493,14 @@ function renderMore(){
 }
 // Свёрнутые разделы настроек; открытые запоминаются, пока приложение открыто
 const openSecs=new Set();let orderEdit=null;
+// иконки разделов настроек: цвет как у монет; у «Типов трат» — четыре цветных квадратика
+const SEC_IC={"in": "<path d=\"M16,152H48v56H16a8,8,0,0,1-8-8V160A8,8,0,0,1,16,152ZM204,56a28,28,0,0,0-12,2.71h0A28,28,0,1,0,176,85.29h0A28,28,0,1,0,204,56Z\" opacity=\"0.2\"/><path d=\"M230.33,141.06a24.43,24.43,0,0,0-21.24-4.23l-41.84,9.62A28,28,0,0,0,140,112H89.94a31.82,31.82,0,0,0-22.63,9.37L44.69,144H16A16,16,0,0,0,0,160v40a16,16,0,0,0,16,16H120a7.93,7.93,0,0,0,1.94-.24l64-16a6.94,6.94,0,0,0,1.19-.4L226,182.82l.44-.2a24.6,24.6,0,0,0,3.93-41.56ZM16,160H40v40H16Zm203.43,8.21-38,16.18L119,200H56V155.31l22.63-22.62A15.86,15.86,0,0,1,89.94,128H140a12,12,0,0,1,0,24H112a8,8,0,0,0,0,16h32a8.32,8.32,0,0,0,1.79-.2l67-15.41.31-.08a8.6,8.6,0,0,1,6.3,15.9ZM164,96a36,36,0,0,0,5.9-.48,36,36,0,1,0,28.22-47A36,36,0,1,0,164,96Zm60-12a20,20,0,1,1-20-20A20,20,0,0,1,224,84ZM164,40a20,20,0,0,1,19.25,14.61,36,36,0,0,0-15,24.93A20.42,20.42,0,0,1,164,80a20,20,0,0,1,0-40Z\"/>", "acc": "<path d=\"M224,80V192a8,8,0,0,1-8,8H56a16,16,0,0,1-16-16V56A16,16,0,0,0,56,72H216A8,8,0,0,1,224,80Z\" opacity=\"0.2\"/><path d=\"M216,64H56a8,8,0,0,1,0-16H192a8,8,0,0,0,0-16H56A24,24,0,0,0,32,56V184a24,24,0,0,0,24,24H216a16,16,0,0,0,16-16V80A16,16,0,0,0,216,64Zm0,128H56a8,8,0,0,1-8-8V78.63A23.84,23.84,0,0,0,56,80H216Zm-48-60a12,12,0,1,1,12,12A12,12,0,0,1,168,132Z\"/>", "exp": "<path d=\"M224,64l-12.16,66.86A16,16,0,0,1,196.1,144H70.55L56,64Z\" opacity=\"0.2\"/><path d=\"M230.14,58.87A8,8,0,0,0,224,56H62.68L56.6,22.57A8,8,0,0,0,48.73,16H24a8,8,0,0,0,0,16h18L67.56,172.29a24,24,0,0,0,5.33,11.27,28,28,0,1,0,44.4,8.44h45.42A27.75,27.75,0,0,0,160,204a28,28,0,1,0,28-28H91.17a8,8,0,0,1-7.87-6.57L80.13,152h116a24,24,0,0,0,23.61-19.71l12.16-66.86A8,8,0,0,0,230.14,58.87ZM104,204a12,12,0,1,1-12-12A12,12,0,0,1,104,204Zm96,0a12,12,0,1,1-12-12A12,12,0,0,1,200,204Zm4-74.57A8,8,0,0,1,196.1,136H77.22L65.59,72H214.41Z\"/>", "data": "<path d=\"M216,80c0,26.51-39.4,48-88,48S40,106.51,40,80s39.4-48,88-48S216,53.49,216,80Z\" opacity=\"0.2\"/><path d=\"M128,24C74.17,24,32,48.6,32,80v96c0,31.4,42.17,56,96,56s96-24.6,96-56V80C224,48.6,181.83,24,128,24Zm80,104c0,9.62-7.88,19.43-21.61,26.92C170.93,163.35,150.19,168,128,168s-42.93-4.65-58.39-13.08C55.88,147.43,48,137.62,48,128V111.36c17.06,15,46.23,24.64,80,24.64s62.94-9.68,80-24.64ZM69.61,53.08C85.07,44.65,105.81,40,128,40s42.93,4.65,58.39,13.08C200.12,60.57,208,70.38,208,80s-7.88,19.43-21.61,26.92C170.93,115.35,150.19,120,128,120s-42.93-4.65-58.39-13.08C55.88,99.43,48,89.62,48,80S55.88,60.57,69.61,53.08ZM186.39,202.92C170.93,211.35,150.19,216,128,216s-42.93-4.65-58.39-13.08C55.88,195.43,48,185.62,48,176V159.36c17.06,15,46.23,24.64,80,24.64s62.94-9.68,80-24.64V176C208,185.62,200.12,195.43,186.39,202.92Z\"/>", "push": "<path d=\"M208,192H48a8,8,0,0,1-6.88-12C47.71,168.6,56,147.81,56,112a72,72,0,0,1,144,0c0,35.82,8.3,56.6,14.9,68A8,8,0,0,1,208,192Z\" opacity=\"0.2\"/><path d=\"M224,71.1a8,8,0,0,1-10.78-3.42,94.13,94.13,0,0,0-33.46-36.91,8,8,0,1,1,8.54-13.54,111.46,111.46,0,0,1,39.12,43.09A8,8,0,0,1,224,71.1ZM35.71,72a8,8,0,0,0,7.1-4.32A94.13,94.13,0,0,1,76.27,30.77a8,8,0,1,0-8.54-13.54A111.46,111.46,0,0,0,28.61,60.32,8,8,0,0,0,35.71,72Zm186.1,103.94A16,16,0,0,1,208,200H167.2a40,40,0,0,1-78.4,0H48a16,16,0,0,1-13.79-24.06C43.22,160.39,48,138.28,48,112a80,80,0,0,1,160,0C208,138.27,212.78,160.38,221.81,175.94ZM150.62,200H105.38a24,24,0,0,0,45.24,0ZM208,184c-10.64-18.27-16-42.49-16-72a64,64,0,0,0-128,0c0,29.52-5.38,53.74-16,72Z\"/>"},SEC_COL={in:'--in',acc:'--acc',exp:'--exp',data:'--muted',push:'--accent'};
+function secIcon(key){
+  if(key==='ltypes')return '<span class="sic four">'+Object.keys(LAYERS).map(k=>'<i style="background:var('+LAYERS[k].c+')"></i>').join('')+'</span>';
+  if(!SEC_IC[key])return '';
+  return '<span class="sic" style="color:var('+SEC_COL[key]+');background:color-mix(in srgb,var('+SEC_COL[key]+') 15%,transparent)"><svg width="20" height="20" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">'+SEC_IC[key]+'</svg></span>'}
 function sec(key,title,meta,body){
-  return '<details class="card" data-sec="'+key+'"'+(openSecs.has(key)?' open':'')+'><summary><h2 class="grow">'+title+'</h2><span class="sub">'+meta+'</span><svg class="arr" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary><div class="secbody">'+body+'</div></details>';
+  return '<details class="card" data-sec="'+key+'"'+(openSecs.has(key)?' open':'')+'><summary>'+secIcon(key)+'<h2 class="grow">'+title+'</h2><span class="sub">'+meta+'</span><svg class="arr" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary><div class="secbody">'+body+'</div></details>';
 }
 // переименование подкатегории: меняется и список, и тип, и все операции в истории, и регулярные платежи
 const SM_IC={"merge": "<path d=\"M184,40v64l-56,56L72,104V40Z\" opacity=\"0.2\"/><path d=\"M192,40v64a8,8,0,0,1-2.34,5.66L136,163.31v49.38l18.34-18.35a8,8,0,0,1,11.32,11.32l-32,32a8,8,0,0,1-11.32,0l-32-32a8,8,0,0,1,11.32-11.32L120,212.69V163.31L66.34,109.66A8,8,0,0,1,64,104V40a8,8,0,0,1,16,0v60.69l48,48,48-48V40a8,8,0,0,1,16,0Z\"/>", "move": "<path d=\"M184,80V208a8,8,0,0,1-8,8H48a8,8,0,0,1-8-8V80a8,8,0,0,1,8-8H176A8,8,0,0,1,184,80Z\" opacity=\"0.2\"/><path d=\"M224,104a8,8,0,0,1-16,0V59.32l-66.33,66.34a8,8,0,0,1-11.32-11.32L196.68,48H152a8,8,0,0,1,0-16h64a8,8,0,0,1,8,8Zm-40,24a8,8,0,0,0-8,8v72H48V80h72a8,8,0,0,0,0-16H48A16,16,0,0,0,32,80V208a16,16,0,0,0,16,16H176a16,16,0,0,0,16-16V136A8,8,0,0,0,184,128Z\"/>", "del": "<path d=\"M200,56V208a8,8,0,0,1-8,8H64a8,8,0,0,1-8-8V56Z\" opacity=\"0.2\"/><path d=\"M216,48H176V40a24,24,0,0,0-24-24H104A24,24,0,0,0,80,40v8H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Zm96,168H64V64H192ZM112,104v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm48,0v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Z\"/>", "edit": "<path d=\"M221.66,90.34,192,120,136,64l29.66-29.66a8,8,0,0,1,11.31,0L221.66,79A8,8,0,0,1,221.66,90.34Z\" opacity=\"0.2\"/><path d=\"M227.31,73.37,182.63,28.68a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H92.69A15.86,15.86,0,0,0,104,219.31L227.31,96a16,16,0,0,0,0-22.63ZM92.69,208H48V163.31l88-88L180.69,120ZM192,108.68,147.31,64l24-24L216,84.68Z\"/>"};
