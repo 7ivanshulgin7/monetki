@@ -177,6 +177,10 @@ nav button[aria-current="page"]{color:var(--accent);font-weight:600}
 .sg.add{border-style:dashed;color:var(--muted)}
 .nsub{display:flex;flex-direction:column;gap:8px;padding:10px;border:1px solid var(--line);border-radius:12px}.nsub input{font:inherit;font-size:16px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--fg)}
 .nsh{color:var(--fg);font-size:13px}.nst .sg span{font-size:11px}
+.nsask{background:var(--accent-soft);border-radius:10px;padding:10px;font-size:14px;display:flex;flex-direction:column;gap:8px}
+.tsum{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--sunk);border-radius:12px;padding:10px 12px}.tsum div{display:flex;flex-direction:column}.tsum b{font-size:15px}
+.tsec{display:flex;flex-direction:column;gap:6px}.tsec>b{font-size:15px}
+.tck{display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;font-size:14px;line-height:1.3}.tck input{width:18px;height:18px;flex:none;margin:1px 0 0;accent-color:var(--accent)}
 .nst{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
 .sgrid{display:grid;grid-template-columns:repeat(var(--sc,4),minmax(0,1fr));gap:6px}
 .sg{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:7px 2px;min-height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:11.5px;line-height:1.15;color:var(--fg);text-align:center;min-width:0}
@@ -456,7 +460,189 @@ const MON_S=['Янв','Фев','Мар','Апр','Май','Июн','Июл','А�
 let S=load();
 function blank(){return {v:1,items:[],ops:[],regular:[],seq:1}}
 function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.v===1)return s}catch(e){}return null}
-function persist(){try{localStorage.setItem(KEY,JSON.stringify(S));return true}catch(e){toast('Не удалось сохранить: память браузера переполнена');return false}}
+/* ---------- порядок в категориях: похожие названия, лимит подкатегорий, мастер «Навести порядок» ---------- */
+const SUB_SOFT=3;   // после 3 подкатегорий новую добавляем только после вопроса
+const normName=s=>(s||'').toLowerCase().replace(/ё/g,'е').replace(/[^a-zа-я0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+// синонимы: магазины → продукты, сервисы такси → такси и т.п.
+const SYN=[['продукты','пятерочка','магнит','перекресток','ашан','лента','вкусвилл','дикси','супермаркет','окей','метро кэш','азбука вкуса','самокат','лавка'],
+  ['такси','яндекс го','яндекс go','yandex go','яндекс такси','uber','ситимобил','максим'],['кофе','кофейня','старбакс','кофе с собой','капучино'],
+  ['аптека','лекарства','таблетки'],['связь','мобильный','мобильная','телефон','сотовая'],['интернет','вайфай','wifi','роутер'],
+  ['подписки','подписка','яндекс плюс','netflix','кинопоиск','spotify','музыка'],['бензин','заправка','азс','топливо'],
+  ['коммуналка','жкх','квартплата','ку'],['аренда','съем','квартира'],['кино','кинотеатр'],['одежда','шмотки','обувь'],
+  ['доставка','деливери','яндекс еда','delivery club'],['сладкое','сладости','конфеты','шоколад'],['спорт','фитнес','спортзал','тренировки']];
+const synG=s=>SYN.findIndex(g=>g.some(x=>s===x||(x.length>=4&&(s.startsWith(x)||s.includes(' '+x)))));
+function lev(a,b){const m=a.length,n=b.length;let p=Array.from({length:n+1},(_,j)=>j);for(let i=1;i<=m;i++){const q=[i];for(let j=1;j<=n;j++)q[j]=Math.min(p[j]+1,q[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));p=q}return p[n]}
+function similar(a,b){a=normName(a);b=normName(b);if(!a||!b)return false;if(a===b)return true;
+  const ga=synG(a);if(ga>=0&&ga===synG(b))return true;
+  const n=Math.min(a.length,b.length);if(n<4)return false;
+  let p=0;while(p<n&&a[p]===b[p])p++;if(p>=4&&p>=n*.6)return true;
+  return n>=6&&lev(a,b)<=(n>=8?2:1)}   // кафе/кофе — разное, опечатки ловим только в длинных словах
+
+// группы категорий: куда отправить мелкую категорию при слиянии
+const CAT_G=[['food',/продукт|магаз|еда|супер|пятер|магнит|перекр|ашан|лента|вкусвил/],['cafe',/кафе|кофе|ресторан|перекус|обед|доставк|фастфуд|бар/],
+  ['home',/дом|квартир|жиль|аренд|коммун|жкх|интернет|ремонт|мебел|быт/],['trans',/транспорт|авто|машин|такси|метро|бензин|парков|проезд/],
+  ['health',/здоров|аптек|врач|медиц|лекар|стомат|анализ/],['self',/на себя|себе|одежд|обув|красот|космет|стрижк|связь|подписк|телефон/],
+  ['fun',/отдых|развлеч|кино|хобби|игр|путеш|поездк|отпуск|поход|спорт|концерт/],['pets',/кот|кош|собак|живот|питом|ветерин|корм/],
+  ['kids',/дет|ребен|сад|школ|игрушк/],['gift',/подар|праздн|день рожд/],['other',/прочее|разное|другое/]];
+const catGroup=c=>{const s=normName(c.name+' '+(c.subs||[]).join(' '));const g=CAT_G.find(([,re])=>re.test(normName(c.name)))||CAT_G.find(([,re])=>re.test(s));return g?g[0]:''};
+const GROUP_FALLBACK={health:'self',gift:'other',kids:'other'};
+// во что собирать группу: понятное название и иконка
+const GROUP_CANON={food:['Продукты','cart'],cafe:['Кафе','cup'],home:['Квартира','home'],trans:['Транспорт','bus'],health:['Здоровье','med'],self:['На себя','person'],
+  fun:['Отдых','tent'],pets:['Питомцы','paw'],kids:['Дети','baby'],gift:['Подарки','gift'],other:['Прочее','star']};
+
+const nsAskHtml=cat=>!E.nsAsk?'':E.nsAsk.k==='sim'
+  ?'<div class="nsask">Похоже на «'+esc(E.nsAsk.m)+'». Записать туда?<div class="row" style="gap:8px"><button class="btn small primary grow" data-nsa="use">Да, в «'+esc(E.nsAsk.m)+'»</button><button class="btn small" data-nsa="force">Создать новую</button></div></div>'
+  :'<div class="nsask">В «'+esc(cat.name)+'» уже '+(cat.subs||[]).length+' подкатегории. Обычно хватает трёх, а мелочь удобнее писать прямо в «'+esc(cat.name)+'».<div class="row" style="gap:8px"><button class="btn small primary grow" data-nsa="plain">Писать в «'+esc(cat.name)+'»</button><button class="btn small" data-nsa="force">Всё равно добавить</button></div></div>';
+function tidyNeeded(){if(!S)return false;const ex=S.items.filter(x=>x.g==='exp'&&!x.hidden);
+  return ex.length>EXP_MAX||ex.some(c=>(c.subs||[]).length>6)||ex.reduce((a,c)=>a+(c.subs||[]).length,0)>32}
+
+// план упрощения: что предлагаем, по шагам; ничего не меняет
+function tidyPlan(){
+  const since=addMonth(ym(today()),-5),vis=S.items.filter(x=>x.g==='exp'&&!x.hidden);
+  const st={};for(const c of vis)st[c.id]={sum6:0,cnt:0,subs:{}};
+  for(const o of S.ops){const id=st[o.to]?o.to:st[o.from]?o.from:null;if(!id)continue;const s=st[id],k=tkey(o.tag),recent=ym(o.d)>=since,v=o.to===id?o.sum:-o.sum;
+    s.cnt++;if(recent)s.sum6+=v;if(k){const t=s.subs[k]=s.subs[k]||{cnt:0,cnt6:0,sum6:0};t.cnt++;if(recent){t.cnt6++;t.sum6+=v}}}
+  const regUse=new Set(S.regular.map(r=>r.to));
+  const acts=[];let keep=vis.slice();
+  // 1) больше 8 категорий: пустые убираем, похожие собираем в одну понятную (Аренда+Коммуналка+Интернет → Квартира),
+  //    если всё ещё много — самые мелкие внутрь близкой группы или в «Прочее»
+  if(keep.length>EXP_MAX){
+    for(const c of vis)if(!st[c.id].cnt&&!regUse.has(c.id)){acts.push({t:'del',c});keep=keep.filter(x=>x!==c)}
+    const sum=c=>st[c.id].sum6,by={};
+    for(const c of keep){const g=catGroup(c)||'other';(by[g]=by[g]||[]).push(c)}
+    const units=[];   // {g, parent(item|null), name, members}
+    for(const g in by){const ms=by[g].sort((a,b)=>sum(b)-sum(a));
+      if(ms.length===1){units.push({g,single:ms[0],sum:sum(ms[0])});continue}
+      const [cn,ic]=GROUP_CANON[g],stem=normName(cn).slice(0,4);
+      const parent=ms.find(c=>normName(c.name).startsWith(stem))||(g==='pets'&&ms.find(c=>/^(кот|кош|собак|пес)/.test(normName(c.name))))||null;
+      units.push({g,parent,name:parent?parent.name:cn,icon:ic,members:ms,sum:ms.reduce((a,c)=>a+sum(c),0)})}
+    const cnt=()=>units.length;
+    // всё ещё больше 8: мелкие одиночки — в близкую группу или в «Прочее»
+    const singles=()=>units.filter(u=>u.single).sort((a,b)=>a.sum-b.sum);
+    for(const u of singles()){if(cnt()<=EXP_MAX)break;if(u.g==='other')continue;
+      const near=units.find(x=>x!==u&&x.g===(GROUP_FALLBACK[u.g]||'other'))||units.find(x=>x!==u&&x.g==='other');
+      if(near){if(near.single){near.parent=near.single;near.name=near.single.name;near.icon=GROUP_CANON[near.g][1];near.members=[near.single];delete near.single}
+        near.members.push(u.single);near.sum+=u.sum;units.splice(units.indexOf(u),1)}
+      else{units.splice(units.indexOf(u),1);units.push({g:'other',parent:null,name:'Прочее',icon:'star',members:[u.single],sum:u.sum})}}
+    // и если всё равно много — самые мелкие группы целиком в «Прочее»
+    while(cnt()>EXP_MAX){const u=units.filter(x=>x.g!=='other').sort((a,b)=>a.sum-b.sum)[0];if(!u)break;
+      let o=units.find(x=>x.g==='other');if(!o){o={g:'other',parent:null,name:'Прочее',icon:'star',members:[],sum:0};units.push(o)}
+      else if(o.single){o.parent=o.single;o.name=o.single.name;o.members=[o.single];delete o.single}
+      o.members.push(...(u.single?[u.single]:u.members));o.sum+=u.sum;units.splice(units.indexOf(u),1)}
+    for(const u of units)if(!u.single){acts.push({t:'grp',parent:u.parent,name:u.name,icon:u.icon,members:u.members.filter(c=>c!==u.parent),n:u.members.reduce((a,c)=>a+st[c.id].cnt,0)})}
+    keep=units.map(u=>u.single||u.parent).filter(Boolean);
+  }
+  // 2) подкатегории оставшихся категорий
+  for(const c of keep){const subs=(c.subs||[]).slice(),S6=st[c.id].sum6||1,info=k=>st[c.id].subs[tkey(k)]||{cnt:0,cnt6:0,sum6:0};
+    const gone=new Set(),cg=synG(normName(c.name));
+    // «Пятёрочка», «Магнит» внутри «Продукты» — это и есть продукты: пишем просто в категорию
+    if(cg>=0)for(const x of subs)if(synG(normName(x))===cg){gone.add(x);acts.push({t:'sfold',c,sub:x,n:info(x).cnt})}
+    // похожие — в самую используемую
+    for(let i=0;i<subs.length;i++)for(let j=i+1;j<subs.length;j++){const a=subs[i],b=subs[j];if(gone.has(a)||gone.has(b)||!similar(a,b))continue;
+      const [from,to]=info(a).cnt>=info(b).cnt?[b,a]:[a,b];gone.add(from);acts.push({t:'smerge',c,from,to,n:info(from).cnt})}
+    let left=subs.filter(x=>!gone.has(x));
+    // редкие: за полгода ≤2 трат и меньше 5% категории (или не использовалась вовсе, когда подкатегорий больше 3)
+    for(const s of left.slice()){const t=info(s);
+      if((t.cnt>0&&t.cnt6<=2&&t.cnt<=5&&t.sum6<S6*.05)||(t.cnt===0&&left.length>SUB_SOFT)){acts.push({t:'sdrop',c,sub:s,n:t.cnt});left=left.filter(x=>x!==s)}}
+    // всё ещё больше 5 — самые мелкие без подкатегории
+    if(left.length>5){const extra=left.slice().sort((a,b)=>info(b).sum6-info(a).sum6).slice(5).filter(x=>info(x).cnt6<=3);/* частые не трогаем */for(const s of extra){acts.push({t:'sdrop',c,sub:s,n:info(s).cnt});left=left.filter(x=>x!==s)}}
+  }
+  return acts;
+}
+function tidyApply(acts){
+  const rm=new Set();
+  for(const a of acts){
+    if(a.t==='del')rm.add(a.c.id);
+    if(a.t==='grp'){let to=a.parent;
+      if(!to){const first=a.members[0],w={};for(const c of a.members)w[c.layer||'base']=(w[c.layer||'base']||0)+S.ops.filter(o=>o.to===c.id).reduce((x,o)=>x+o.sum,0);
+        to={id:uid('i'),g:'exp',name:a.name,icon:a.icon,layer:Object.keys(w).sort((x,y)=>w[y]-w[x])[0]||'base',subs:[]};S.items.splice(S.items.indexOf(first),0,to)}
+      for(const c of a.members){const nm=c.name,plain=tkey(nm)===tkey(to.name)||(synG(normName(nm))>=0&&synG(normName(nm))===synG(normName(to.name)));
+        for(const o of S.ops){if(o.to===c.id||o.from===c.id){if(o.to===c.id)o.to=to.id;if(o.from===c.id)o.from=to.id;if(plain)delete o.tag;else o.tag=nm}}
+        for(const r of S.regular)if(r.to===c.id){r.to=to.id;r.tag=plain?'':nm}
+        if(!plain){to.subs=to.subs||[];if(!to.subs.some(x=>tkey(x)===tkey(nm)))to.subs.push(nm);
+          if((c.layer||'base')!==(to.layer||'base'))(to.subLayer=to.subLayer||{})[tkey(nm)]=c.layer||'base'}
+        rm.add(c.id)}}
+    if(a.t==='cat'){const {c,to}=a,nm=c.name;
+      for(const o of S.ops){if(o.to===c.id){o.to=to.id;o.tag=nm}if(o.from===c.id){o.from=to.id;o.tag=nm}}
+      for(const r of S.regular)if(r.to===c.id){r.to=to.id;r.tag=nm}
+      to.subs=to.subs||[];if(!to.subs.some(x=>tkey(x)===tkey(nm)))to.subs.push(nm);
+      if((c.layer||'base')!==(to.layer||'base'))(to.subLayer=to.subLayer||{})[tkey(nm)]=c.layer||'base';
+      rm.add(c.id)}
+    if(a.t==='sfold')a.t='sdrop';
+    if(a.t==='smerge'||a.t==='sdrop'){const {c}=a,k=tkey(a.t==='smerge'?a.from:a.sub);
+      for(const o of S.ops)if((o.to===c.id||o.from===c.id)&&tkey(o.tag)===k){if(a.t==='smerge')o.tag=a.to;else delete o.tag}
+      for(const r of S.regular)if(r.to===c.id&&tkey(r.tag)===k)r.tag=a.t==='smerge'?a.to:'';
+      c.subs=(c.subs||[]).filter(x=>tkey(x)!==k);if(c.subLayer)delete c.subLayer[k]}
+  }
+  S.items=S.items.filter(x=>!rm.has(x.id));
+}
+function openTidy(){
+  const all=tidyPlan(),on=all.map(()=>true);
+  const cnt=()=>{const ex=S.items.filter(x=>x.g==='exp'&&!x.hidden);return [ex.length,ex.reduce((a,c)=>a+(c.subs||[]).length,0)]};
+  const [c0,s0]=cnt();
+  const draw=()=>{
+    const sel=all.filter((_,i)=>on[i]),grpC=sel.filter(a=>a.t==='grp').reduce((x,a)=>x+a.members.length-(a.parent?0:1),0),grpS=sel.filter(a=>a.t==='grp').reduce((x,a)=>x+a.members.length,0);
+    const c1=c0-sel.filter(a=>a.t==='cat'||a.t==='del').length-grpC,s1=s0+sel.filter(a=>a.t==='cat').length+grpS-sel.filter(a=>a.t==='smerge'||a.t==='sdrop'||a.t==='sfold').length;
+    const tr=n=>n?' <span class="sub">· '+fmt(n)+' '+(n%10===1&&n%100!==11?'трата':n%10>=2&&n%10<=4&&(n%100<10||n%100>=20)?'траты':'трат')+'</span>':' <span class="sub">· не использовалась</span>';
+    const lbl=a=>a.t==='del'?'Убрать пустую категорию «'+esc(a.c.name)+'»':
+      a.t==='grp'?a.members.map(c=>'«'+esc(c.name)+'»').join(', ')+' → '+(a.parent?'внутрь «'+esc(a.name)+'»':'новая категория «'+esc(a.name)+'»')+tr(a.n):
+      a.t==='cat'?'«'+esc(a.c.name)+'» → внутрь «'+esc(a.to.name)+'»'+tr(a.n):
+      a.t==='smerge'?'«'+esc(a.from)+'» → в «'+esc(a.to)+'» <span class="sub">('+esc(a.c.name)+')</span>'+tr(a.n):
+      '«'+esc(a.sub)+'» → просто «'+esc(a.c.name)+'»'+tr(a.n);   
+    const sec=(t,title,hint)=>{const ix=all.map((a,i)=>[a,i]).filter(([a])=>t.includes(a.t));if(!ix.length)return '';
+      return '<div class="tsec"><b>'+title+'</b><div class="sub">'+hint+'</div>'+ix.map(([a,i])=>'<label class="tck"><input type="checkbox" data-ti="'+i+'"'+(on[i]?' checked':'')+'><span>'+lbl(a)+'</span></label>').join('')+'</div>'};
+    $('panel').innerHTML='<div class="row"><b class="grow" style="font-size:17px">Навести порядок</b><button class="x" id="td-close" aria-label="Закрыть">✕</button></div>'+
+      (all.length?
+       '<div class="tsum"><div><span class="sub">Сейчас</span><b>'+c0+' кат. · '+s0+' подкат.</b></div><span class="parr">→</span><div><span class="sub">Станет</span><b>'+c1+' кат. · '+s1+' подкат.</b></div></div>'+
+       '<div class="sub">Чем меньше кнопок, тем быстрее записывать и понятнее аналитика. Ничего не теряется: все траты останутся, просто переедут. Сними галочку, если что-то не нравится.</div>'+
+       sec(['del','cat','grp'],'Лишние категории','На главном экране помещается 8. Мелкие станут подкатегориями похожих.')+
+       sec(['sfold'],'Это и так одна категория','Магазины и сервисы внутри категории — пишем просто в неё.')+
+       sec(['smerge'],'Похоже на одно и то же','Объединим в одну подкатегорию.')+
+       sec(['sdrop'],'Редкие подкатегории','Почти не используются — такие траты будут просто в категории.')+
+       '<div class="sub">Перед изменениями сохраню копию базы: файлом в загрузки и снимком в приложении.</div>'+
+       '<button class="btn primary" id="td-go"'+(sel.length?'':' disabled')+'>Навести порядок ('+sel.length+')</button>'
+      :'<div class="empty" style="padding:24px 8px">Всё и так аккуратно 👍<br><span class="sub">Категорий и подкатегорий в меру, редких и повторов нет.</span></div>');
+    $('td-close').onclick=closeSheet;
+    $('panel').querySelectorAll('[data-ti]').forEach(x=>x.onchange=()=>{on[+x.dataset.ti]=x.checked;draw()});
+    if($('td-go'))$('td-go').onclick=async()=>{
+      const backup=JSON.stringify(S);let saved=false;
+      try{await snapPut('before-tidy',backup);saved=true}catch(e){}
+      try{exportJson();saved=true}catch(e){}
+      if(!saved){toast('Не удалось сохранить копию — ничего не меняю');return}
+      tidyApply(sel);persist();render();
+      const [c2,s2]=cnt();
+      $('panel').innerHTML='<div class="row"><b class="grow" style="font-size:17px">Готово ✨</b><button class="x" id="td-close" aria-label="Закрыть">✕</button></div>'+
+        '<div class="tsum"><div><span class="sub">Было</span><b>'+c0+' кат. · '+s0+' подкат.</b></div><span class="parr">→</span><div><span class="sub">Стало</span><b>'+c2+' кат. · '+s2+' подкат.</b></div></div>'+
+        '<div class="sub">Копия базы сохранена в загрузки, а ещё в ⋯ → Данные → Снимки («До наведения порядка»). Все траты на месте, суммы не изменились.</div>'+
+        '<button class="btn primary" id="td-ok">Отлично</button><button class="btn" id="td-undo">Вернуть как было</button>';
+      $('td-close').onclick=$('td-ok').onclick=closeSheet;
+      $('td-undo').onclick=()=>{S=JSON.parse(backup);persist();closeSheet();render();toast('Вернул как было')};
+    };
+  };
+  draw();$('sheet').hidden=false;
+}
+
+/* ---------- вечерние напоминания (пуши) ---------- */
+// адрес сервера и публичный ключ появятся после настройки Cloudflare; пока пусто — раздел в «Ещё» скрыт
+const PUSH={url:'',key:''};
+const pushOk=()=>!!(PUSH.url&&PUSH.key&&'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window);
+const pushSt=()=>{try{return JSON.parse(localStorage.getItem('monetki.push'))||{}}catch(e){return {}}};
+const pushSave=v=>{try{localStorage.setItem('monetki.push',JSON.stringify(v))}catch(e){}};
+const b64u8=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')+'==='.slice((s.length+3)%4)),c=>c.charCodeAt(0));
+const pushPost=(path,body)=>fetch(PUSH.url+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());
+async function pushOn(time){
+  if(await Notification.requestPermission()!=='granted'){toast('Разреши уведомления в настройках браузера');return false}
+  const reg=await navigator.serviceWorker.ready;
+  const sub=(await reg.pushManager.getSubscription())||await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u8(PUSH.key)});
+  const r=await pushPost('/subscribe',{sub:sub.toJSON(),time,tz:Intl.DateTimeFormat().resolvedOptions().timeZone||'Europe/Moscow'});
+  if(!r.id)throw 0;pushSave({id:r.id,time,pinged:''});pushPing();return true}
+async function pushOff(){const st=pushSt();try{const reg=await navigator.serviceWorker.ready,sub=await reg.pushManager.getSubscription();if(sub)await sub.unsubscribe()}catch(e){}
+  if(st.id)pushPost('/unsubscribe',{id:st.id}).catch(()=>{});pushSave({})}
+// «сегодня уже записал» — сервер не будет напоминать; уходит только дата, без сумм
+function pushPing(){if(!pushOk()||!S)return;const st=pushSt(),d=today();if(!st.id||st.pinged===d)return;
+  if(!(dayHasOps(d)||(S.quiet||[]).includes(d)))return;
+  st.pinged=d;pushSave(st);pushPost('/ping',{id:st.id,last:d}).catch(()=>{st.pinged='';pushSave(st)})}
+function persist(){setTimeout(pushPing,0);try{localStorage.setItem(KEY,JSON.stringify(S));return true}catch(e){toast('Не удалось сохранить: память браузера переполнена');return false}}
 function uid(p){return p+(S.seq++).toString(36)}
 const byId=id=>S.items.find(x=>x.id===id);
 const fmt=n=>Math.round(n).toLocaleString('ru-RU');
@@ -561,6 +747,8 @@ function renderMsum(cm){
   const MU='var(--muted)';
   if(gap)acts.push(tipRow('today','Вчера пусто',MU,B('n-add','Записать',1)+B('n-quiet','Не тратил')));
   for(const x of revalDue())acts.push(tipRow('up','Переоценить <b>'+esc(x.it.name)+'</b>',MU,B('rv:'+x.it.id,'Переоценить',1)));
+  let tSnooze='';try{tSnooze=localStorage.getItem('monetki.tidySnooze')||''}catch(e){}
+  if(tidyNeeded()&&tSnooze<=today())acts.push(tipRow('up','Кажется, ты борщишь с категориями 🙂','var(--l-irr)',B('tidy','Разобрать',1)+B('tidy-later','Позже')));
   if(needBk)acts.push(tipRow('day',bkDays==null?'Копии базы ещё нет':'Копия '+bkDays+' дн. назад','var(--bad)',B('bk-save','Сохранить',1)+B('bk-later','Позже')));
   if(!F.now&&!F.inc&&!acts.length){el.hidden=true;return}el.hidden=false;
   const rows=acts.concat(F.tips.map(t=>tipRow(t[0],t[1],t[2]==='var(--bad)'?t[2]:MU,'',t[3]))).slice(0,Math.max(3,acts.length));
@@ -575,6 +763,8 @@ function renderMsum(cm){
       else if(a==='bk-save'){exportJson();render();toast('Копия сохранена в загрузки')}
       else if(a==='bk-later'){try{localStorage.setItem('monetki.bkSnooze',addDays(today(),7))}catch(e){}render()}
       else if(a.startsWith('rv:'))openReval(a.slice(3));
+      else if(a==='tidy')openTidy();
+      else if(a==='tidy-later'){try{localStorage.setItem('monetki.tidySnooze',addDays(today(),14))}catch(e){}render()}
       else if(a.startsWith('dyn:'))openDyn(a.slice(4));
       return}
     statMonth=cm;statDetail=false;tab='stats';render()};
@@ -809,11 +999,11 @@ function renderEntry(){
    (b&&b.g==='exp'?(()=>{const lt=t=>(t&&(b.subLayer||{})[t.toLowerCase()])||b.layer||'base',cur=lt(E.tag);
      const chip=(t,l)=>'<button class="sg" aria-pressed="'+((E.tag||'').toLowerCase()===t.toLowerCase())+'" data-tag="'+esc(t)+'"><i style="background:var('+LAYERS[lt(t)].c+')"></i><span>'+esc(l)+'</span></button>';
      // «+ Своя» — новая подкатегория прямо отсюда: название и тип
-     const addF=E.newSub?'<div class="nsub"><div class="sub">Подкатегория уточняет траты внутри «'+esc(b.name)+'»</div><input id="ns-name" placeholder="Например: '+(b.name==='Магазин'?'Бытовая химия':'Подарки')+'" maxlength="24" autocomplete="off"><div class="sub">Какая это трата?</div><div class="nst">'+Object.keys(LAYERS).map(k=>'<button class="sg" data-nst="'+k+'" aria-pressed="'+(k===(E.nsType||b.layer||'base'))+'"><i style="background:var('+LAYERS[k].c+')"></i><span>'+LAYERS[k].n+'</span></button>').join('')+'</div><div class="sub nsh">'+LAYER_HINT[E.nsType||b.layer||'base']+'</div><div class="row" style="gap:8px"><button class="btn small" id="ns-cancel">Отмена</button><button class="btn small primary grow" id="ns-ok">Добавить</button></div></div>':'';
+     const addF=E.newSub?'<div class="nsub"><div class="sub">Подкатегория уточняет траты внутри «'+esc(b.name)+'»</div><input id="ns-name" value="'+esc(E.nsName||'')+'" placeholder="Например: '+(b.name==='Магазин'?'Бытовая химия':'Подарки')+'" maxlength="24" autocomplete="off">'+nsAskHtml(b)+'<div class="sub">Какая это трата?</div><div class="nst">'+Object.keys(LAYERS).map(k=>'<button class="sg" data-nst="'+k+'" aria-pressed="'+(k===(E.nsType||b.layer||'base'))+'"><i style="background:var('+LAYERS[k].c+')"></i><span>'+LAYERS[k].n+'</span></button>').join('')+'</div><div class="sub nsh">'+LAYER_HINT[E.nsType||b.layer||'base']+'</div><div class="row" style="gap:8px"><button class="btn small" id="ns-cancel">Отмена</button><button class="btn small primary grow" id="ns-ok">Добавить</button></div></div>':'';
      return '<div class="sgrid" style="--sc:'+Math.min(4,tags.length+2)+'">'+chip('',b.name)+tags.map(t=>chip(t,t)).join('')+(E.newSub?'':'<button class="sg add" id="e-addsub"><span>+&nbsp;Добавить</span></button>')+'</div>'+addF+
        '<div class="sub" style="display:flex;align-items:center;gap:6px;margin-top:-4px"><i style="width:8px;height:8px;border-radius:2px;background:var('+LAYERS[cur].c+')"></i>Тип: '+LAYERS[cur].n+'</div>'})():'')+
    (a&&a.g==='in'?'<div class="sgrid" style="--sc:'+Math.min(4,tags.length+2)+'">'+[['',a.name],...tags.map(t=>[t,t])].map(([t,l])=>'<button class="sg" aria-pressed="'+((E.tag||'').toLowerCase()===t.toLowerCase())+'" data-tag="'+esc(t)+'"><span>'+esc(l)+'</span></button>').join('')+(E.newSub?'':'<button class="sg add" id="e-addsub"><span>+&nbsp;Добавить</span></button>')+'</div>'+
-     (E.newSub?'<div class="nsub"><div class="sub">Подкатегория уточняет, откуда пришли деньги в «'+esc(a.name)+'»</div><input id="ns-name" placeholder="Например: '+(a.name==='Активы'?'Дивиденды':'Премия')+'" maxlength="24" autocomplete="off"><div class="row" style="gap:8px"><button class="btn small" id="ns-cancel">Отмена</button><button class="btn small primary grow" id="ns-ok">Добавить</button></div></div>':''):'')+
+     (E.newSub?'<div class="nsub"><div class="sub">Подкатегория уточняет, откуда пришли деньги в «'+esc(a.name)+'»</div><input id="ns-name" value="'+esc(E.nsName||'')+'" placeholder="Например: '+(a.name==='Активы'?'Дивиденды':'Премия')+'" maxlength="24" autocomplete="off">'+nsAskHtml(a)+'<div class="row" style="gap:8px"><button class="btn small" id="ns-cancel">Отмена</button><button class="btn small primary grow" id="ns-ok">Добавить</button></div></div>':''):'')+
    '<div class="row edate"><button class="chip" data-d="'+today()+'" aria-pressed="'+(E.d===today())+'">Сегодня</button><button class="chip" data-d="'+yd+'" aria-pressed="'+(E.d===yd)+'">Вчера</button><input id="e-date" type="date" value="'+E.d+'" max="'+today()+'" aria-label="Дата"></div>'+
    '<div class="keys">'+['1','2','3','4','5','6','7','8','9','00','0','⌫'].map(k=>'<button data-k="'+k+'">'+k+'</button>').join('')+'</div>'+
    '<button class="btn primary" id="e-save">'+(E.edit?'Сохранить изменения':'Записать')+'</button>'+
@@ -836,8 +1026,19 @@ function renderEntry(){
   if($('e-addsub'))$('e-addsub').onclick=()=>{keepFields();E.newSub=true;E.nsType=null;renderEntry();setTimeout(()=>$('ns-name')&&$('ns-name').focus(),50)};
   if($('ns-name')){const cat=b&&b.g==='exp'?b:a;
     $('panel').querySelectorAll('[data-nst]').forEach(x=>x.onclick=()=>{const v=$('ns-name').value;E.nsType=x.dataset.nst;renderEntry();$('ns-name').value=v});
-    $('ns-cancel').onclick=()=>{E.newSub=false;renderEntry()};
+    $('ns-cancel').onclick=()=>{E.newSub=false;E.nsAsk=null;E.nsName='';renderEntry()};
+    $('panel').querySelectorAll('[data-nsa]').forEach(x=>x.onclick=()=>{const v=x.dataset.nsa;
+      if(v==='use'){E.tag=E.nsAsk.m;E.newSub=false;E.nsAsk=null;E.nsName='';renderEntry()}
+      else if(v==='plain'){E.tag='';E.newSub=false;E.nsAsk=null;E.nsName='';renderEntry()}
+      else if(v==='force'){E.nsForce=E.nsAsk.n;E.nsAsk=null;$('ns-ok').click()}});
     const ok=()=>{const n=$('ns-name').value.trim();if(!n){toast('Введи название');return}
+      E.nsName=n;
+      // похожая уже есть — предложить её; больше 3 — переспросить
+      const sim=(cat.subs||[]).find(x=>tkey(x)!==tkey(n)&&similar(x,n));
+      if(E.nsForce!==n){
+        if(sim){E.nsAsk={k:'sim',n,m:sim};renderEntry();return}
+        if((cat.subs||[]).length>=SUB_SOFT&&!(cat.subs||[]).some(x=>tkey(x)===tkey(n))){E.nsAsk={k:'lim',n};renderEntry();return}}
+      E.nsAsk=null;E.nsForce=null;E.nsName='';
       if((cat.subs||[]).some(x=>x.toLowerCase()===n.toLowerCase())){E.tag=(cat.subs.find(x=>x.toLowerCase()===n.toLowerCase()));E.newSub=false;renderEntry();return}
       cat.subs=(cat.subs||[]).concat(n);if(cat.g==='exp'){const t=E.nsType||cat.layer||'base';if(t!==(cat.layer||'base'))(cat.subLayer=cat.subLayer||{})[n.toLowerCase()]=t}
       persist();E.tag=n;E.newSub=false;renderEntry();toast('Добавлена подкатегория «'+n+'»')};
@@ -1152,7 +1353,7 @@ function catSpend(id,m){let s=0;for(const o of S.ops){if(ym(o.d)!==m)continue;if
 
 /* ---------- ещё ---------- */
 // Версия приложения: поднимать вместе с CACHE в sw.js — видно внизу «Ещё», пришло ли обновление
-const APP_VER='75 от 18.10.2026';
+const APP_VER='78 от 19.10.2026';
 // Подпись автора: знак T/V + itivan (inline SVG, цвет текста берётся из темы)
 const SIG='<svg class="sig" viewBox="0 2 229 80" role="img" aria-label="itivan" style="height:24px;width:auto;display:block;overflow:visible"><svg x="2" y="5" width="80" height="74" viewBox="40 0 220 160"><polyline class="vo" points="64,-20 150,172 236,-20" fill="none" stroke-width="42"/><polyline points="64,-20 150,172 236,-20" fill="none" stroke="#FF2E93" stroke-width="30"/><line x1="52" y1="15" x2="248" y2="15" stroke-width="50" style="stroke:var(--bg)"/><line x1="150" y1="0" x2="150" y2="170" stroke-width="50" style="stroke:var(--bg)"/><line x1="62" y1="15" x2="238" y2="15" stroke-width="30" style="stroke:currentColor"/><line x1="150" y1="0" x2="150" y2="160" stroke-width="30" style="stroke:currentColor"/></svg><path fill="currentColor" d="M102.6 55.6V50.5H109.8V39.9H103.6V34.7H115.2V50.5H121.2V55.6ZM112.1 31.4Q110.6 31.4 109.6 30.6Q108.7 29.8 108.7 28.5Q108.7 27.1 109.6 26.3Q110.6 25.5 112.1 25.5Q113.7 25.5 114.6 26.3Q115.5 27.1 115.5 28.5Q115.5 29.8 114.6 30.6Q113.7 31.4 112.1 31.4Z M134.9 55.6Q131.7 55.6 129.9 53.8Q128.1 52.0 128.1 48.8V39.9H122.6V34.7H128.1V28.8H133.8V34.7H141.6V39.9H133.8V48.8Q133.8 50.5 135.5 50.5H141.2V55.6Z M145.2 55.6V50.5H152.4V39.9H146.1V34.7H157.7V50.5H163.8V55.6ZM154.7 31.4Q153.1 31.4 152.2 30.6Q151.2 29.8 151.2 28.5Q151.2 27.1 152.2 26.3Q153.1 25.5 154.7 25.5Q156.2 25.5 157.2 26.3Q158.1 27.1 158.1 28.5Q158.1 29.8 157.2 30.6Q156.2 31.4 154.7 31.4Z M171.7 55.6 164.8 34.7H170.7L174.2 46.5Q174.5 47.5 174.8 48.8Q175.1 50.0 175.3 50.8Q175.5 50.0 175.7 48.8Q176.0 47.5 176.3 46.5L179.8 34.7H185.6L178.8 55.6Z M193.8 56.0Q190.6 56.0 188.8 54.3Q186.9 52.6 186.9 49.7Q186.9 46.5 189.1 44.8Q191.3 43.1 195.4 43.1H199.7V41.6Q199.7 40.4 198.9 39.6Q198.0 38.9 196.6 38.9Q195.3 38.9 194.4 39.5Q193.5 40.1 193.3 41.2H187.8Q188.1 38.0 190.6 36.2Q193.0 34.3 196.8 34.3Q200.8 34.3 203.1 36.3Q205.4 38.3 205.4 41.6V55.6H199.9V52.2H199.8Q199.5 53.7 198.3 54.6Q196.6 56.0 193.8 56.0ZM195.9 51.8Q197.6 51.8 198.7 50.9Q199.7 50.0 199.7 48.6V46.4H195.5Q194.2 46.4 193.4 47.1Q192.6 47.8 192.6 49.1Q192.6 50.3 193.5 51.1Q194.4 51.8 195.9 51.8Z M208.9 55.6V34.7H214.4V38.7H214.5Q214.8 37.0 215.9 35.9Q217.4 34.3 220.0 34.3Q223.0 34.3 224.9 36.5Q226.7 38.6 226.7 42.1V55.6H221.0V42.7Q221.0 41.1 220.2 40.2Q219.3 39.3 217.8 39.3Q216.2 39.3 215.4 40.2Q214.6 41.1 214.6 42.7V55.6Z"/></svg>';
 function renderMore(){
@@ -1180,12 +1381,23 @@ function renderMore(){
      '<div class="sub">Каждой категории и подкатегории задаётся тип — по нему аналитика делит траты. Названия можно поменять.</div>'+
      Object.keys(LAYERS).map(k=>'<label class="row" style="gap:10px"><i style="width:12px;height:12px;border-radius:4px;flex:none;background:var('+LAYERS[k].c+')"></i><input data-ln="'+k+'" value="'+esc(LAYERS[k].n)+'" maxlength="20" style="flex:1;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 10px;min-height:42px;color:var(--fg);font-size:15px"></label>').join('')+
      '<button class="btn" id="m-ln">Сохранить названия</button>');
+  if(pushOk()){const st=pushSt(),on=!!st.id,tm=st.time||'21:00';
+    h+=sec('push','Напоминание вечером',on?'в '+tm:'выкл.',
+     '<div class="sub">Если за день ничего не записано, вечером придёт напоминание. Если уже записал — не побеспокоит. На сервер уходит только дата последней записи, без сумм.</div>'+
+     '<label class="field">Время<select id="p-time">'+['19:00','19:30','20:00','20:30','21:00','21:30','22:00','22:30','23:00'].map(t=>'<option'+(t===tm?' selected':'')+'>'+t+'</option>').join('')+'</select></label>'+
+     (on?'<button class="btn" id="p-test">Прислать пробное</button><button class="btn" id="p-off">Выключить напоминание</button>':'<button class="btn primary" id="p-on">Включить напоминание</button>'));}
   h+=sec('data','Данные',S?'операций: '+fmt(S.ops.length):'',
      '<div class="sub">Всё хранится только на этом телефоне. Делай копию время от времени.</div>'+
-     (S?'<button class="btn" id="m-sort">Разобрать категории и метки</button><button class="btn" id="m-csvout">Выгрузить в CSV (для Excel)</button>':'')+
+     (S?'<button class="btn primary" id="m-tidy">Навести порядок в категориях</button><button class="btn" id="m-sort">Разобрать вручную (для опытных)</button><button class="btn" id="m-csvout">Выгрузить в CSV (для Excel)</button>':'')+
      '<button class="btn" id="m-csv">Загрузить CSV (свой или CoinKeeper)</button><button class="btn" id="m-export">Сохранить копию (JSON)</button><button class="btn" id="m-restore">Восстановить из копии</button><button class="btn" id="m-snaps">Снимки и откат</button>'+(S&&S.lastBackup?'<div class="sub">Последняя копия в файл: '+S.lastBackup.split('-').reverse().join('.')+'</div>':''));
   h+='<div style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 0 8px;color:var(--fg)">'+SIG+'<div class="sub">Монетки · бета · v'+APP_VER+'</div></div>';
   $('more').innerHTML=h;
+  if($('p-time')){
+    if($('p-on'))$('p-on').onclick=async()=>{try{if(await pushOn($('p-time').value)){toast('Напоминание включено');renderMore()}}catch(e){toast('Не получилось включить. Приложение установлено на экран «Домой»?')}};
+    if($('p-off'))$('p-off').onclick=async()=>{await pushOff();toast('Напоминание выключено');renderMore()};
+    if($('p-test'))$('p-test').onclick=()=>pushPost('/test',{id:pushSt().id}).then(r=>toast(r.status<300?'Отправлено — сейчас придёт':'Сервер ответил '+(r.status||r.error))).catch(()=>toast('Нет связи с сервером'));
+    $('p-time').onchange=async e=>{if(pushSt().id){try{await pushOn(e.target.value);toast('Напомню в '+e.target.value);renderMore()}catch(_){toast('Не удалось сохранить время')}}};
+  }
   $('more').querySelectorAll('details').forEach(d=>d.addEventListener('toggle',()=>{d.open?openSecs.add(d.dataset.sec):openSecs.delete(d.dataset.sec)}));
   $('more').querySelectorAll('[data-item]').forEach(b=>b.onclick=()=>openItemEdit(b.dataset.item));
   $('more').querySelectorAll('[data-rsub]').forEach(b=>b.onclick=()=>openSubRename(b.dataset.rsub,b.dataset.sn));
@@ -1197,7 +1409,7 @@ function renderMore(){
   $('more').querySelectorAll('[data-ord]').forEach(b=>b.onclick=()=>{const it=byId(b.dataset.ord),sh=S.items.filter(x=>x.g===it.g&&!x.hidden),i=sh.indexOf(it),nb=sh[i+ +b.dataset.d];if(!nb)return;
     const a=S.items.indexOf(it),c=S.items.indexOf(nb);S.items[a]=nb;S.items[c]=it;persist();render()});
   if($('m-ln'))$('m-ln').onclick=()=>{const ln={};$('more').querySelectorAll('[data-ln]').forEach(x=>{const v=x.value.trim();if(v&&v!==LAYER_DEF[x.dataset.ln])ln[x.dataset.ln]=v});S.layerNames=ln;persist();render();toast('Сохранено')};
-  if($('m-sort')){$('m-sort').onclick=()=>openSort();$('m-csvout').onclick=exportCsv}
+  if($('m-sort')){$('m-tidy').onclick=openTidy;$('m-sort').onclick=()=>openSort();$('m-csvout').onclick=exportCsv}
   $('m-export').onclick=()=>{exportJson();renderMore()};$('m-snaps').onclick=openSnaps;$('m-restore').onclick=()=>$('file-json').click();$('m-csv').onclick=()=>$('file-csv').click();
 }
 // Свёрнутые разделы настроек; открытые запоминаются, пока приложение открыто
@@ -1475,7 +1687,7 @@ async function openSnaps(){
   let armed=null;
   const draw=()=>{$('panel').innerHTML='<div class="row"><b class="grow">Снимки базы</b><button class="x" id="sn-close" aria-label="Закрыть">✕</button></div>'+
     '<div class="sub">Приложение само сохраняет копию базы раз в день, хранит 14 последних. Это защита от ошибок: случайно удалил или слил не то — откатись. От очистки браузера не спасает: для этого — «Сохранить копию» в файл.</div>'+
-    (keys.length?keys.map(k=>'<div class="op" style="background:var(--sunk)"><span class="grow">'+(k==='before-rollback'?'До последнего отката':'Начало дня '+k.split('-').reverse().join('.'))+'<br><span class="sub">'+fmt(info[k]||0)+' операций</span></span><button class="btn small'+(armed===k?' danger':'')+'" data-snap="'+k+'">'+(armed===k?'Точно откатить?':'Откатить')+'</button></div>').join(''):'<div class="sub">Снимков пока нет — первый появится при следующем открытии приложения.</div>');
+    (keys.length?keys.map(k=>'<div class="op" style="background:var(--sunk)"><span class="grow">'+(k==='before-rollback'?'До последнего отката':k==='before-tidy'?'До наведения порядка':'Начало дня '+k.split('-').reverse().join('.'))+'<br><span class="sub">'+fmt(info[k]||0)+' операций</span></span><button class="btn small'+(armed===k?' danger':'')+'" data-snap="'+k+'">'+(armed===k?'Точно откатить?':'Откатить')+'</button></div>').join(''):'<div class="sub">Снимков пока нет — первый появится при следующем открытии приложения.</div>');
     $('sheet').hidden=false;$('sn-close').onclick=closeSheet;
     $('panel').querySelectorAll('[data-snap]').forEach(b=>b.onclick=async()=>{const k=b.dataset.snap;if(armed!==k){armed=k;draw();return}
       try{const v=JSON.parse(await snapGet(k));await snapPut('before-rollback',JSON.stringify(S));S=v;persist();closeSheet();tab='coins';render();toast('Откатились: '+fmt(S.ops.length)+' операций')}catch(e){toast('Не удалось откатить')}})};
