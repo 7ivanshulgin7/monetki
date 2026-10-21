@@ -577,7 +577,7 @@ function tidyPlan(){
   const since=addMonth(ym(today()),-5),vis=S.items.filter(x=>x.g==='exp'&&!x.hidden);
   const st={};for(const c of vis)st[c.id]={sum6:0,cnt:0,subs:{}};
   for(const o of S.ops){const id=st[o.to]?o.to:st[o.from]?o.from:null;if(!id)continue;const s=st[id],k=tkey(o.tag),recent=ym(o.d)>=since,v=o.to===id?o.sum:-o.sum;
-    s.cnt++;if(recent)s.sum6+=v;if(k){const t=s.subs[k]=s.subs[k]||{cnt:0,cnt6:0,sum6:0};t.cnt++;if(recent){t.cnt6++;t.sum6+=v}}}
+    s.cnt++;if(recent)s.sum6+=v;if(k&&!(byId(id).subArch||[]).some(x=>tkey(x)===k)){const t=s.subs[k]=s.subs[k]||{cnt:0,cnt6:0,sum6:0};t.cnt++;if(recent){t.cnt6++;t.sum6+=v}}}
   const regUse=new Set(S.regular.map(r=>r.to));
   const acts=[];let keep=vis.slice();
   // 1) больше 8 категорий: пустые убираем, похожие собираем в одну понятную (Аренда+Коммуналка+Интернет → Квартира),
@@ -944,7 +944,7 @@ function richSummary(m){
           const bg=xs=>xs.length?' style="background:'+xs.map(x=>'linear-gradient(var(--line),var(--line)) '+x+'px 0/1.5px 100% no-repeat').join(',')+'"':'';
           h+=cs.map(([id,v],j)=>{const lc=j===cs.length-1,c=byId(id);
             const sb=Object.entries((F.laySub[k]||{})[id]||{}).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);
-            const nm=t=>{if(!t)return 'без подкатегории';const f=(c.subs||[]).find(x=>x.toLowerCase()===t);return esc(f||t)};
+            const nm=t=>{if(!t)return 'без подкатегории';const f=[...(c.subs||[]),...(c.subArch||[])].find(x=>x.toLowerCase()===t);return esc(f||t)};
             // вся сумма категории в этом типе — одна подкатегория: показываем сразу её, без повтора
             const one=sb.length===1&&sb[0][0];
             let r=tnRow(null,one?nm(sb[0][0]):esc(c.name),fmt(v),null,' class="tn c'+(lc?' cl':'')+' tlink" data-act="dyn:'+id+'"'+bg(last?[]:[7]));
@@ -1049,7 +1049,7 @@ function openReval(id){
     if($('rv-add'))$('rv-add').onclick=()=>{adding=true;draw();setTimeout(()=>$('rv-name')&&$('rv-name').focus(),50)};
     if($('rv-name')){$('rv-cancel').onclick=()=>{adding=false;draw()};
       const ok=()=>{const n=$('rv-name').value.trim();if(!n){toast('Введи название');return}const ex=(gi.subs||[]).find(x=>x.toLowerCase()===n.toLowerCase());
-        if(!ex){gi.subs=(gi.subs||[]).concat(n);persist()}tag=ex||n;adding=false;draw()};
+        if(!ex){if(!subRestore(gi,n))gi.subs=(gi.subs||[]).concat(n);persist()}tag=ex||n;adding=false;draw()};
       $('rv-ok').onclick=ok;$('rv-name').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();ok()}}}
     $('v-save').onclick=()=>{const g=gainItem(),d=Math.round(nv-cur);
       // рост — доход «Активы», просадка — расход «Убытки» (как велось в CoinKeeper); нулевая — отметка, что проверено
@@ -1230,7 +1230,7 @@ function renderEntry(){
         if((cat.subs||[]).length>=SUB_SOFT&&!(cat.subs||[]).some(x=>tkey(x)===tkey(n))){E.nsAsk={k:'lim',n};renderEntry();return}}
       E.nsAsk=null;E.nsForce=null;E.nsName='';
       if((cat.subs||[]).some(x=>x.toLowerCase()===n.toLowerCase())){E.tag=(cat.subs.find(x=>x.toLowerCase()===n.toLowerCase()));E.newSub=false;renderEntry();return}
-      cat.subs=(cat.subs||[]).concat(n);if(cat.g==='exp'){const t=E.nsType||cat.layer||'base';if(t!==(cat.layer||'base'))(cat.subLayer=cat.subLayer||{})[n.toLowerCase()]=t}
+      if(!subRestore(cat,n)){cat.subs=(cat.subs||[]).concat(n);if(cat.g==='exp'){const t=E.nsType||cat.layer||'base';if(t!==(cat.layer||'base'))(cat.subLayer=cat.subLayer||{})[n.toLowerCase()]=t}}
       persist();E.tag=n;E.newSub=false;renderEntry();toast('Добавлена подкатегория «'+n+'»')};
     $('ns-ok').onclick=ok;$('ns-name').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();ok()}}}
   $('panel').querySelectorAll('[data-d]').forEach(c=>c.onclick=()=>{keepFields();E.d=c.dataset.d;renderEntry()});
@@ -1583,7 +1583,7 @@ function catSpend(id,m){let s=0;for(const o of S.ops){if(ym(o.d)!==m)continue;if
 
 /* ---------- ещё ---------- */
 // Версия приложения: поднимать вместе с CACHE в sw.js — видно внизу «Ещё», пришло ли обновление
-const APP_VER='99 от 22.10.2026';
+const APP_VER='100 от 22.10.2026';
 // Подпись автора: знак T/V + itivan (inline SVG, цвет текста берётся из темы)
 const SIG='<svg class="sig" viewBox="0 2 229 80" role="img" aria-label="itivan" style="height:24px;width:auto;display:block;overflow:visible"><svg x="2" y="5" width="80" height="74" viewBox="40 0 220 160"><polyline class="vo" points="64,-20 150,172 236,-20" fill="none" stroke-width="42"/><polyline points="64,-20 150,172 236,-20" fill="none" stroke="#FF2E93" stroke-width="30"/><line x1="52" y1="15" x2="248" y2="15" stroke-width="50" style="stroke:var(--bg)"/><line x1="150" y1="0" x2="150" y2="170" stroke-width="50" style="stroke:var(--bg)"/><line x1="62" y1="15" x2="238" y2="15" stroke-width="30" style="stroke:currentColor"/><line x1="150" y1="0" x2="150" y2="160" stroke-width="30" style="stroke:currentColor"/></svg><path fill="currentColor" d="M102.6 55.6V50.5H109.8V39.9H103.6V34.7H115.2V50.5H121.2V55.6ZM112.1 31.4Q110.6 31.4 109.6 30.6Q108.7 29.8 108.7 28.5Q108.7 27.1 109.6 26.3Q110.6 25.5 112.1 25.5Q113.7 25.5 114.6 26.3Q115.5 27.1 115.5 28.5Q115.5 29.8 114.6 30.6Q113.7 31.4 112.1 31.4Z M134.9 55.6Q131.7 55.6 129.9 53.8Q128.1 52.0 128.1 48.8V39.9H122.6V34.7H128.1V28.8H133.8V34.7H141.6V39.9H133.8V48.8Q133.8 50.5 135.5 50.5H141.2V55.6Z M145.2 55.6V50.5H152.4V39.9H146.1V34.7H157.7V50.5H163.8V55.6ZM154.7 31.4Q153.1 31.4 152.2 30.6Q151.2 29.8 151.2 28.5Q151.2 27.1 152.2 26.3Q153.1 25.5 154.7 25.5Q156.2 25.5 157.2 26.3Q158.1 27.1 158.1 28.5Q158.1 29.8 157.2 30.6Q156.2 31.4 154.7 31.4Z M171.7 55.6 164.8 34.7H170.7L174.2 46.5Q174.5 47.5 174.8 48.8Q175.1 50.0 175.3 50.8Q175.5 50.0 175.7 48.8Q176.0 47.5 176.3 46.5L179.8 34.7H185.6L178.8 55.6Z M193.8 56.0Q190.6 56.0 188.8 54.3Q186.9 52.6 186.9 49.7Q186.9 46.5 189.1 44.8Q191.3 43.1 195.4 43.1H199.7V41.6Q199.7 40.4 198.9 39.6Q198.0 38.9 196.6 38.9Q195.3 38.9 194.4 39.5Q193.5 40.1 193.3 41.2H187.8Q188.1 38.0 190.6 36.2Q193.0 34.3 196.8 34.3Q200.8 34.3 203.1 36.3Q205.4 38.3 205.4 41.6V55.6H199.9V52.2H199.8Q199.5 53.7 198.3 54.6Q196.6 56.0 193.8 56.0ZM195.9 51.8Q197.6 51.8 198.7 50.9Q199.7 50.0 199.7 48.6V46.4H195.5Q194.2 46.4 193.4 47.1Q192.6 47.8 192.6 49.1Q192.6 50.3 193.5 51.1Q194.4 51.8 195.9 51.8Z M208.9 55.6V34.7H214.4V38.7H214.5Q214.8 37.0 215.9 35.9Q217.4 34.3 220.0 34.3Q223.0 34.3 224.9 36.5Q226.7 38.6 226.7 42.1V55.6H221.0V42.7Q221.0 41.1 220.2 40.2Q219.3 39.3 217.8 39.3Q216.2 39.3 215.4 40.2Q214.6 41.1 214.6 42.7V55.6Z"/></svg>';
 function renderMore(){
@@ -1599,7 +1599,8 @@ function renderMore(){
         return '<label class="tsel'+(k&&!own?' inh':'')+'"><i style="background:var('+LAYERS[cur].c+')"></i><span>'+LAYERS[cur].n+'</span><select data-tl="'+it.id+'" data-tk="'+esc(k||'')+'" aria-label="Тип трат">'+
           (k?'<option value=""'+(own?'':' selected')+'>как у категории ('+LAYERS[it.layer||'base'].n+')</option>':'')+Object.keys(LAYERS).map(l=>'<option value="'+l+'"'+((k?own:cur)===l?' selected':'')+'>'+LAYERS[l].n+'</option>').join('')+'</select></label>'};
       const row=x=>'<div class="tree"><div class="trow"><button class="op tname" data-item="'+x.id+'"><span class="tic">'+svg(ICONS[x.icon]||ICONS.star,18,'currentColor')+'</span><span class="grow">'+esc(x.name)+'</span>'+(g==='acc'&&x.reval?'<span class="sub">переоценка</span>':'')+'</button>'+(g==='exp'?tsel(x,''):'')+'</div>'+
-        ((g==='exp'||g==='in')&&(x.subs||[]).length?(x.subs||[]).map((sb,i,arr)=>'<div class="tsub"><span class="tl">'+(i===arr.length-1?'└':'├')+'</span><button class="grow tsn" data-rsub="'+x.id+'" data-sn="'+esc(sb)+'">'+esc(sb)+'</button>'+(g==='exp'?tsel(x,sb.toLowerCase()):'')+'</div>').join(''):'')+((g==='exp'||g==='in')?'<div class="tsub"><span class="tl"> </span><button class="tadd" data-asub="'+x.id+'">+ подкатегория</button></div>':'')+'</div>';
+        ((g==='exp'||g==='in')&&(x.subs||[]).length?(x.subs||[]).map((sb,i,arr)=>'<div class="tsub"><span class="tl">'+(i===arr.length-1?'└':'├')+'</span><button class="grow tsn" data-rsub="'+x.id+'" data-sn="'+esc(sb)+'">'+esc(sb)+'</button>'+(g==='exp'?tsel(x,sb.toLowerCase()):'')+'</div>').join(''):'')+
+        (x.subArch||[]).map(sb=>'<div class="tsub" style="opacity:.6"><span class="tl">·</span><span class="grow">'+esc(sb)+' <span class="sub">· в архиве</span></span><button class="tadd" data-unarch="'+x.id+'" data-sn="'+esc(sb)+'">Вернуть</button></div>').join('')+((g==='exp'||g==='in')?'<div class="tsub"><span class="tl"> </span><button class="tadd" data-asub="'+x.id+'">+ подкатегория</button></div>':'')+'</div>';
       const arch=list.filter(x=>x.hidden);
       // режим «Порядок»: стрелки двигают монету в ряду главного экрана
       const shown=list.filter(x=>!x.hidden),ed=orderEdit===g;
@@ -1632,6 +1633,7 @@ function renderMore(){
   $('more').querySelectorAll('details').forEach(d=>d.addEventListener('toggle',()=>{d.open?openSecs.add(d.dataset.sec):openSecs.delete(d.dataset.sec);if(d.open&&d.dataset.sec==='guide'){try{localStorage.setItem('monetki.guideSeen','1')}catch(e){}}}));
   $('more').querySelectorAll('[data-item]').forEach(b=>b.onclick=()=>openItemEdit(b.dataset.item));
   $('more').querySelectorAll('[data-rsub]').forEach(b=>b.onclick=()=>openSubRename(b.dataset.rsub,b.dataset.sn));
+  $('more').querySelectorAll('[data-unarch]').forEach(b=>b.onclick=()=>{const it=byId(b.dataset.unarch);if(it&&subRestore(it,b.dataset.sn)){persist();render();toast('«'+b.dataset.sn+'» снова в выборе')}});
   $('more').querySelectorAll('[data-asub]').forEach(b=>b.onclick=()=>openSubRename(b.dataset.asub,null));
   $('more').querySelectorAll('[data-tl]').forEach(x=>x.onchange=()=>{const it=byId(x.dataset.tl),k=x.dataset.tk;
     if(!k)it.layer=x.value;else{it.subLayer=it.subLayer||{};if(x.value)it.subLayer[k]=x.value;else delete it.subLayer[k]}
@@ -1659,6 +1661,9 @@ function sec(key,title,meta,body){
 const SM_IC={"merge": "<path d=\"M184,40v64l-56,56L72,104V40Z\" opacity=\"0.2\"/><path d=\"M192,40v64a8,8,0,0,1-2.34,5.66L136,163.31v49.38l18.34-18.35a8,8,0,0,1,11.32,11.32l-32,32a8,8,0,0,1-11.32,0l-32-32a8,8,0,0,1,11.32-11.32L120,212.69V163.31L66.34,109.66A8,8,0,0,1,64,104V40a8,8,0,0,1,16,0v60.69l48,48,48-48V40a8,8,0,0,1,16,0Z\"/>", "move": "<path d=\"M184,80V208a8,8,0,0,1-8,8H48a8,8,0,0,1-8-8V80a8,8,0,0,1,8-8H176A8,8,0,0,1,184,80Z\" opacity=\"0.2\"/><path d=\"M224,104a8,8,0,0,1-16,0V59.32l-66.33,66.34a8,8,0,0,1-11.32-11.32L196.68,48H152a8,8,0,0,1,0-16h64a8,8,0,0,1,8,8Zm-40,24a8,8,0,0,0-8,8v72H48V80h72a8,8,0,0,0,0-16H48A16,16,0,0,0,32,80V208a16,16,0,0,0,16,16H176a16,16,0,0,0,16-16V136A8,8,0,0,0,184,128Z\"/>", "del": "<path d=\"M200,56V208a8,8,0,0,1-8,8H64a8,8,0,0,1-8-8V56Z\" opacity=\"0.2\"/><path d=\"M216,48H176V40a24,24,0,0,0-24-24H104A24,24,0,0,0,80,40v8H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Zm96,168H64V64H192ZM112,104v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm48,0v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Z\"/>", "edit": "<path d=\"M221.66,90.34,192,120,136,64l29.66-29.66a8,8,0,0,1,11.31,0L221.66,79A8,8,0,0,1,221.66,90.34Z\" opacity=\"0.2\"/><path d=\"M227.31,73.37,182.63,28.68a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H92.69A15.86,15.86,0,0,0,104,219.31L227.31,96a16,16,0,0,0,0-22.63ZM92.69,208H48V163.31l88-88L180.69,120ZM192,108.68,147.31,64l24-24L216,84.68Z\"/>"};
 const smIcon=(k,n)=>'<svg width="'+(n||30)+'" height="'+(n||30)+'" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">'+SM_IC[k]+'</svg>';
 // подкатегория в древе: шапка с карандашом + три плитки с иконками; old=null — новая подкатегория
+// подкатегория в архиве: не предлагается при записи, но записи хранят её название и тип — видно в истории и аналитике
+function subRestore(it,n){const k=tkey(n),a=it.subArch||[];const f=a.find(x=>tkey(x)===k);if(!f)return false;
+  it.subArch=a.filter(x=>tkey(x)!==k);if(!it.subArch.length)delete it.subArch;it.subs=(it.subs||[]).concat(f);return true}
 function openSubRename(id,old){
   const it=byId(id),ok=tkey(old),mine=o=>(o.to===id||o.from===id)&&tkey(o.tag)===ok;
   const cnt=old==null?0:S.ops.filter(mine).length,others=S.items.filter(x=>x.g===it.g&&x.id!==id&&!x.hidden),sibs=(it.subs||[]).filter(x=>tkey(x)!==ok);
@@ -1684,7 +1689,9 @@ function openSubRename(id,old){
       '<button class="btn primary" id="sr-ok"'+(pick?'':' disabled')+'>'+(pick?'Объединить с «'+esc(pick)+'»':'Выбери подкатегорию')+'</button>'+back;
     else if(mode==='move')body='<div class="sub">«'+esc(old)+'» переедет вместе с записями в:</div><div class="chips">'+others.map(x=>'<button class="chip" data-pk="'+x.id+'" aria-pressed="'+(pick===x.id)+'">'+esc(x.name)+'</button>').join('')+'</div>'+
       '<button class="btn primary" id="sr-ok"'+(pick?'':' disabled')+'>'+(pick?'Перенести в «'+esc(byId(pick).name)+'»':'Выбери категорию')+'</button>'+back;
-    else if(mode==='del')body='<div class="sub">Подкатегория «'+esc(old)+'» исчезнет. '+cnt+' записей останутся в «'+esc(it.name)+'» без подкатегории.</div><button class="btn danger" id="sr-ok">Удалить</button>'+back;
+    else if(mode==='del')body=cnt?'<div class="sub">У «'+esc(old)+'» есть записи: '+cnt+'. Лучше убрать в архив — при записи трат она больше не появится, а в истории и аналитике останется со своим названием и типом.</div>'+
+        '<button class="btn primary" id="sr-arch">В архив</button><button class="btn danger" id="sr-ok">Удалить совсем</button><div class="sub" style="font-size:13px">При удалении записи останутся в «'+esc(it.name)+'», но без подкатегории.</div>'+back
+      :'<div class="sub">Подкатегория «'+esc(old)+'» пустая — удалится без следа.</div><button class="btn danger" id="sr-ok">Удалить</button>'+back;
     $('panel').innerHTML=(mode==='menu'
       ?'<div class="row"><div class="grow" style="min-width:0"><div class="sub">'+esc(it.name)+'</div><div class="smh"><b>'+esc(old)+'</b><button class="smed" data-sm="rename" aria-label="Переименовать">'+smIcon('edit',18)+'</button></div><div class="sub">'+cnt+' '+(cnt%10===1&&cnt%100!==11?'запись':cnt%10>=2&&cnt%10<=4&&(cnt%100<10||cnt%100>=20)?'записи':'записей')+'</div></div><button class="x" id="sr-close" aria-label="Закрыть">✕</button></div>'
       :'<div class="row"><b class="grow">'+esc(it.name)+' · '+(old==null?'новая подкатегория':esc(old))+'</b><button class="x" id="sr-close" aria-label="Закрыть">✕</button></div>')+body;
@@ -1692,11 +1699,14 @@ function openSubRename(id,old){
     $('panel').querySelectorAll('[data-sm]').forEach(x=>x.onclick=()=>{mode=x.dataset.sm;pick=null;draw()});
     $('panel').querySelectorAll('[data-pk]').forEach(x=>x.onclick=()=>{pick=x.dataset.pk;draw()});
     if($('sr-name'))setTimeout(()=>{const f=$('sr-name');if(f){f.focus();f.select&&mode==='rename'&&f.select()}},60);
+    if($('sr-arch'))$('sr-arch').onclick=()=>{it.subs=(it.subs||[]).filter(x=>tkey(x)!==ok);
+      if(!(it.subArch||[]).some(x=>tkey(x)===ok))it.subArch=(it.subArch||[]).concat(old);done('«'+old+'» в архиве')};
     const okb=$('sr-ok');if(!okb)return;
     okb.onclick=()=>{
       if(mode==='new'){const nn=$('sr-name').value.trim();if(!nn){toast('Введи название');return}
         if((it.subs||[]).some(x=>tkey(x)===tkey(nn))){toast('Такая уже есть');return}
         const sim=(it.subs||[]).find(x=>similar(x,nn));if(sim&&armed!=='sim'){armed='sim';toast('Похоже на «'+sim+'». Нажми ещё раз, чтобы всё равно добавить');return}
+        if(subRestore(it,nn)){done('«'+nn+'» вернулась из архива');return}
         it.subs=(it.subs||[]).concat(nn);done('Добавлена «'+nn+'»')}
       else if(mode==='rename'){const nn=$('sr-name').value.trim();if(!nn){toast('Введи название');return}if(nn===old){closeSheet();return}
         const dup=renameTo(nn);done(dup?'Слито с «'+nn+'»':'Переименовано: '+nn)}
@@ -1805,6 +1815,7 @@ function mergeItems(src,dst,keep){
   if(src.g==='exp'){
     const subs=[...(dst.subs||[])],add=n=>{if(n&&!subs.some(x=>tkey(x)===tkey(n)))subs.push(n)};
     (src.subs||[]).forEach(add);if(keep)add(src.name);dst.subs=subs;
+    const ar=(src.subArch||[]).filter(n=>!subs.some(x=>tkey(x)===tkey(n))&&!(dst.subArch||[]).some(x=>tkey(x)===tkey(n)));if(ar.length)dst.subArch=(dst.subArch||[]).concat(ar);
     dst.subLayer=Object.assign({},src.subLayer||{},dst.subLayer||{});
     if(keep&&(src.layer||'base')!==(dst.layer||'base')&&!dst.subLayer[tkey(src.name)])dst.subLayer[tkey(src.name)]=src.layer||'base';
   }
