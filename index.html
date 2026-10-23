@@ -225,6 +225,14 @@ nav button[aria-current="page"]{color:var(--accent);font-weight:600}
 .chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;min-height:34px}
 .chip[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);font-weight:600}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
+.lfr{background:var(--sunk);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:4px;margin-bottom:4px}.lfbig{font-size:24px;font-weight:700}.lfbig .sub{font-size:13px;font-weight:400}
+.lfleg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--muted)}.lfleg span{display:flex;align-items:center;gap:4px}.lfleg i{width:8px;height:8px;border-radius:2px}.lfleg b{color:var(--fg);font-weight:600}
+.lfst{position:sticky;top:-16px;z-index:2;background:var(--surface);display:flex;gap:10px;align-items:center;font-size:14px;padding:6px 0;border-bottom:1px solid var(--line)}
+.lfh{margin:12px 0 2px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.lfrow{display:flex;align-items:center;gap:8px;font-size:15px;min-height:40px}.lfrow .grow{flex:1;min-width:0}.lfrow .sub{font-size:13px}
+.lfi,.lfn,.lfrow select{border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:6px 8px;min-height:36px;color:var(--fg);font-size:16px;width:100px;text-align:right;font-variant-numeric:tabular-nums}
+.lfn{flex:1;width:auto;text-align:left}.lfrow select{width:auto;text-align:left}
+.lfg{border-top:1px solid var(--line);padding:4px 0}
 .field{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
 .field input,.field select{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 10px;min-height:42px;color:var(--fg);font-size:15px}
 .psel{position:relative;display:inline-flex;align-items:center;gap:5px;color:#fff;border-radius:10px;padding:7px 10px;min-width:0;max-width:calc(50% - 14px);cursor:pointer}
@@ -956,7 +964,7 @@ function richSummary(m){
     (inc.length?'<div class="ms-lay">'+inc.map(([id,v],i)=>'<i style="width:'+(v/it*100)+'%;background:color-mix(in srgb,var(--in) '+shade(i)+'%,transparent)"></i>').join('')+'</div>'+
       '<div class="tr">'+inc.map(([id,v],i)=>tnRow('color-mix(in srgb,var(--in) '+shade(i)+'%,transparent)',id==='_'?'Прочее':esc(byId(id).name),fmt(v)+pct(v,it))).join('')+'</div>':'')+
     '<div class="troot"><span class="grow">Итог месяца</span><b class="num" style="color:'+(net>=0?'var(--good)':'var(--bad)')+'">'+(net>=0?'+':'−')+rub(Math.abs(net))+'</b></div>'+
-    '</div>'+avgCard(m)+'<button class="btn" id="s-detail" style="width:100%;min-height:36px;padding:6px;font-size:15px">🤓 Духота — все цифры и графики</button>';
+    '</div>'+avgCard(m)+'<div style="display:flex;gap:8px"><button class="btn" id="s-life" style="flex:1;min-height:36px;padding:6px;font-size:15px">🎯 Хочу жить так</button><button class="btn" id="s-detail" style="flex:1;min-height:36px;padding:6px;font-size:15px">🤓 Духота</button></div>';
 }
 function renderCoins(){
   const first=!S;$('first-run').hidden=!first;$('bands').hidden=first;
@@ -1422,7 +1430,7 @@ function renderStats(){
     $('stats').innerHTML='<div class="shead"><h1>Аналитика</h1><div class="month" style="padding:0"><button id="s-prev" aria-label="Предыдущий месяц">‹</button><b>'+monthLabel(m)+'</b><button id="s-next" aria-label="Следующий месяц"'+(isCur?' disabled':'')+'>›</button></div></div>'+richSummary(m);
     $('s-prev').onclick=()=>{statMonth=addMonth(statMonth,-1);renderStats()};
     $('s-next').onclick=()=>{if(!isCur){statMonth=addMonth(statMonth,1);renderStats()}};
-    $('s-detail').onclick=()=>{setDetail(true);renderStats()};
+    $('s-detail').onclick=()=>{setDetail(true);renderStats()};$('s-life').onclick=openLife;
     if($('lay-more'))$('lay-more').onclick=()=>{layOpen=!layOpen;try{localStorage.setItem('monetki.layOpen',layOpen?'1':'0')}catch(e){}renderStats()};
     $('stats').querySelectorAll('[data-act^="dyn:"]').forEach(x=>x.onclick=()=>openDyn(x.dataset.act.slice(4)));return}
   $('stats').classList.remove('fit');
@@ -1540,6 +1548,66 @@ function catByMonth(catId,tag){
     const mm=ym(o.d);if(o.to===catId)r[mm]=(r[mm]||0)+o.sum;else if(o.from===catId)r[mm]=(r[mm]||0)-o.sum}
   return r;
 }
+/* ---------- «Хочу жить так»: сколько нужно зарабатывать под желаемую жизнь ---------- */
+const LIFE_KIND={m:'каждый месяц',y:'раз в год',g:'цель'};
+function lifeData(){
+  const cm=ym(today()),prev=[1,2,3,4,5,6].map(k=>addMonth(cm,-k)).filter(x=>S.ops.some(o=>ym(o.d)===x)),n=prev.length||1;
+  const cats=S.items.filter(x=>x.g==='exp'&&!x.hidden).map(c=>({c,a:Math.round(prev.reduce((s,x)=>s+catSpend(c.id,x),0)/n/100)*100}));
+  return {cats,inc:prev.reduce((s,x)=>s+monthIncome(x),0)/n,n:prev.length};
+}
+function lifePlan(){S.life=S.life||{};return Object.assign(S.life,Object.assign({cat:{},goals:[],irr:10,save:10,cush:3,cushHave:0,cushYears:2,tax:0},S.life))}
+function lifeCalc(P,A){
+  const life=A.cats.reduce((s,x)=>s+(P.cat[x.c.id]!=null?+P.cat[x.c.id]:x.a),0)+P.goals.filter(g=>g.k==='m').reduce((s,g)=>s+(+g.sum||0),0);
+  const irr=life*(+P.irr||0)/100;
+  const goals=P.goals.reduce((s,g)=>s+(g.k==='y'?(+g.sum||0)/12:g.k==='g'?Math.max(0,(+g.sum||0)-(+g.have||0))/Math.max(1,(+g.years||1)*12):0),0);
+  const cush=Math.max(0,(+P.cush||0)*(life+irr)-(+P.cushHave||0))/Math.max(1,(+P.cushYears||1)*12);
+  const base=life+irr+goals+cush,sv=Math.min(90,+P.save||0)/100,net=base/(1-sv),save=net-base,tx=Math.min(60,+P.tax||0)/100,gross=net/(1-tx);
+  return {life,irr,goals,cush,save,net,gross,tax:gross-net};
+}
+function openLife(){
+  const P=lifePlan(),A=lifeData(),num=v=>+String(v).replace(/\s/g,'').replace(',','.')||0;
+  const inp=(k,v,ph,w)=>'<input class="lfi" data-lk="'+k+'" inputmode="numeric" value="'+(v===''||v==null?'':v)+'" placeholder="'+(ph==null?'':ph)+'"'+(w?' style="width:'+w+'px"':'')+'>';
+  const res=()=>{const C=lifeCalc(P,A),parts=[['Жизнь','var(--exp)',C.life],['Нерегулярное','var(--l-irr)',C.irr],['Цели','var(--l-obl)',C.goals],['Подушка','var(--l-hob)',C.cush],['Откладывать','var(--good)',C.save],['Налог','var(--muted)',C.tax]].filter(x=>x[2]>0.5);
+    const tot=C.gross||1,diff=A.inc-C.net;
+    return '<div class="lfr"><span class="sub">Нужно зарабатывать'+(C.tax>0?' (до налога)':' (на руки)')+'</span><b class="num lfbig">'+rub(Math.round(C.gross/100)*100)+' <span class="sub">в месяц</span></b>'+
+      '<div class="ms-lay">'+parts.map(x=>'<i style="width:'+(x[2]/tot*100)+'%;background:'+x[1]+'"></i>').join('')+'</div>'+
+      '<div class="lfleg">'+parts.map(x=>'<span><i style="background:'+x[1]+'"></i>'+x[0]+' <b class="num">'+fmt(Math.round(x[2]/100)*100)+'</b></span>').join('')+'</div>'+
+      (C.tax>0?'<div class="row" style="margin-top:6px"><span class="grow sub">Из них на руки</span><b class="num">'+rub(Math.round(C.net/100)*100)+'</b></div>':'')+
+      (A.n?'<div class="row"'+(C.tax>0?'':' style="margin-top:6px"')+'><span class="grow sub">Сейчас получаешь в среднем</span><b class="num">'+rub(Math.round(A.inc/100)*100)+'</b></div>'+
+        '<div class="row"><span class="grow sub">'+(diff>=0?'Запас':'Не хватает')+'</span><b class="num" style="color:'+(diff>=0?'var(--good)':'var(--bad)')+'">'+(diff>=0?'+':'')+rub(Math.abs(Math.round(diff/100)*100))+'</b></div>':'')+'</div>'};
+  // короткая плашка сверху остаётся видна при прокрутке
+  const top=()=>{const C=lifeCalc(P,A),diff=A.inc-C.net;return '<span class="grow">Нужно <b class="num">'+rub(Math.round(C.gross/100)*100)+'</b></span>'+(A.n?'<span style="color:'+(diff>=0?'var(--good)':'var(--bad)')+'">'+(diff>=0?'запас +':'не хватает ')+'<b class="num">'+fmt(Math.abs(Math.round(diff/100)*100))+'</b></span>':'')};
+  const draw=()=>{
+    $('panel').innerHTML='<div class="row"><b class="grow">🎯 Хочу жить так</b><button class="x" id="lf-close" aria-label="Закрыть">✕</button></div>'+
+      '<div class="sub" style="margin:-4px 0 4px">Впиши, сколько хочешь тратить. Серые цифры в полях — сколько тратишь сейчас (в среднем за '+(A.n||0)+' мес.); не трогаешь — так и считается.</div>'+
+      '<div id="lf-top" class="lfst">'+top()+'</div><div id="lf-res">'+res()+'</div>'+
+      '<h3 class="lfh">Каждый месяц</h3>'+
+      A.cats.map(x=>'<div class="lfrow"><span class="grow">'+esc(x.c.name)+'</span>'+inp('cat:'+x.c.id,P.cat[x.c.id],fmt(x.a))+'</div>').join('')+
+      '<h3 class="lfh">Цели и новое</h3>'+
+      (P.goals.length?'':'<div class="sub" style="font-size:13px">Например: ипотека — каждый месяц; отпуск — раз в год; машина 2 000 000 — цель через 3 года.</div>')+
+      P.goals.map((g,i)=>'<div class="lfg"><div class="lfrow"><input class="lfn" data-lk="g'+i+':name" value="'+esc(g.name||'')+'" placeholder="Название"><button class="x" data-lfdel="'+i+'" aria-label="Убрать">✕</button></div>'+
+        '<div class="lfrow"><select data-lk="g'+i+':k">'+Object.keys(LIFE_KIND).map(k=>'<option value="'+k+'"'+(g.k===k?' selected':'')+'>'+LIFE_KIND[k]+'</option>').join('')+'</select><span class="grow"></span>'+inp('g'+i+':sum',g.sum,'сумма',110)+'</div>'+
+        (g.k==='g'?'<div class="lfrow"><span class="grow sub">через, лет</span>'+inp('g'+i+':years',g.years,'3',60)+'<span class="sub">уже есть</span>'+inp('g'+i+':have',g.have,'0',100)+'</div>':'')+'</div>').join('')+
+      '<button class="btn" id="lf-add">+ Добавить цель или трату</button>'+
+      '<h3 class="lfh">Чтобы не обманываться</h3>'+
+      '<div class="lfrow"><span class="grow">Нерегулярное: ремонт, техника, подарки, врачи<br><span class="sub">сверху к тратам, %</span></span>'+inp('irr',P.irr,'10',64)+'</div>'+
+      '<div class="lfrow"><span class="grow">Откладывать на будущее<br><span class="sub">от дохода, %</span></span>'+inp('save',P.save,'10',64)+'</div>'+
+      '<div class="lfrow"><span class="grow">Подушка безопасности<br><span class="sub">месяцев жизни</span></span>'+inp('cush',P.cush,'3',64)+'</div>'+
+      '<div class="lfrow"><span class="grow sub">уже отложено на подушку</span>'+inp('cushHave',P.cushHave,'0',110)+'</div>'+
+      '<div class="lfrow"><span class="grow sub">собрать её за, лет</span>'+inp('cushYears',P.cushYears,'2',64)+'</div>'+
+      '<div class="lfrow"><span class="grow">Налог с дохода, %<br><span class="sub">0 — если считаешь «на руки»</span></span>'+inp('tax',P.tax,'0',64)+'</div>';
+    $('sheet').hidden=false;$('lf-close').onclick=closeSheet;
+    $('panel').querySelectorAll('[data-lk]').forEach(el=>{el.oninput=el.onchange=()=>{
+      const [a,b]=el.dataset.lk.split(':'),v=el.value;
+      if(a==='cat'){if(v.trim()==='')delete P.cat[b];else P.cat[b]=num(v)}
+      else if(a[0]==='g'&&b){const g=P.goals[+a.slice(1)];if(b==='name')g.name=v;else if(b==='k'){g.k=v;persist();draw();return}else g[b]=num(v)}
+      else P[a]=v.trim()===''?'':num(v);
+      persist();$('lf-res').innerHTML=res();$('lf-top').innerHTML=top()}});
+    $('panel').querySelectorAll('[data-lfdel]').forEach(b=>b.onclick=()=>{P.goals.splice(+b.dataset.lfdel,1);persist();draw()});
+    $('lf-add').onclick=()=>{P.goals.push({name:'',k:'g',sum:'',years:3,have:''});persist();draw();const f=$('panel').querySelectorAll('.lfn');if(f.length)f[f.length-1].focus()};
+  };
+  draw();
+}
 function openDyn(catId,tag){D={cat:catId,tag:tag||'',span:12,sel:null};drawDyn();$('sheet').hidden=false}
 function drawDyn(){
   const c=byId(D.cat),m=ym(today()),by=catByMonth(D.cat,D.tag);
@@ -1583,7 +1651,7 @@ function catSpend(id,m){let s=0;for(const o of S.ops){if(ym(o.d)!==m)continue;if
 
 /* ---------- ещё ---------- */
 // Версия приложения: поднимать вместе с CACHE в sw.js — видно внизу «Ещё», пришло ли обновление
-const APP_VER='100 от 22.10.2026';
+const APP_VER='101 от 23.10.2026';
 // Подпись автора: знак T/V + itivan (inline SVG, цвет текста берётся из темы)
 const SIG='<svg class="sig" viewBox="0 2 229 80" role="img" aria-label="itivan" style="height:24px;width:auto;display:block;overflow:visible"><svg x="2" y="5" width="80" height="74" viewBox="40 0 220 160"><polyline class="vo" points="64,-20 150,172 236,-20" fill="none" stroke-width="42"/><polyline points="64,-20 150,172 236,-20" fill="none" stroke="#FF2E93" stroke-width="30"/><line x1="52" y1="15" x2="248" y2="15" stroke-width="50" style="stroke:var(--bg)"/><line x1="150" y1="0" x2="150" y2="170" stroke-width="50" style="stroke:var(--bg)"/><line x1="62" y1="15" x2="238" y2="15" stroke-width="30" style="stroke:currentColor"/><line x1="150" y1="0" x2="150" y2="160" stroke-width="30" style="stroke:currentColor"/></svg><path fill="currentColor" d="M102.6 55.6V50.5H109.8V39.9H103.6V34.7H115.2V50.5H121.2V55.6ZM112.1 31.4Q110.6 31.4 109.6 30.6Q108.7 29.8 108.7 28.5Q108.7 27.1 109.6 26.3Q110.6 25.5 112.1 25.5Q113.7 25.5 114.6 26.3Q115.5 27.1 115.5 28.5Q115.5 29.8 114.6 30.6Q113.7 31.4 112.1 31.4Z M134.9 55.6Q131.7 55.6 129.9 53.8Q128.1 52.0 128.1 48.8V39.9H122.6V34.7H128.1V28.8H133.8V34.7H141.6V39.9H133.8V48.8Q133.8 50.5 135.5 50.5H141.2V55.6Z M145.2 55.6V50.5H152.4V39.9H146.1V34.7H157.7V50.5H163.8V55.6ZM154.7 31.4Q153.1 31.4 152.2 30.6Q151.2 29.8 151.2 28.5Q151.2 27.1 152.2 26.3Q153.1 25.5 154.7 25.5Q156.2 25.5 157.2 26.3Q158.1 27.1 158.1 28.5Q158.1 29.8 157.2 30.6Q156.2 31.4 154.7 31.4Z M171.7 55.6 164.8 34.7H170.7L174.2 46.5Q174.5 47.5 174.8 48.8Q175.1 50.0 175.3 50.8Q175.5 50.0 175.7 48.8Q176.0 47.5 176.3 46.5L179.8 34.7H185.6L178.8 55.6Z M193.8 56.0Q190.6 56.0 188.8 54.3Q186.9 52.6 186.9 49.7Q186.9 46.5 189.1 44.8Q191.3 43.1 195.4 43.1H199.7V41.6Q199.7 40.4 198.9 39.6Q198.0 38.9 196.6 38.9Q195.3 38.9 194.4 39.5Q193.5 40.1 193.3 41.2H187.8Q188.1 38.0 190.6 36.2Q193.0 34.3 196.8 34.3Q200.8 34.3 203.1 36.3Q205.4 38.3 205.4 41.6V55.6H199.9V52.2H199.8Q199.5 53.7 198.3 54.6Q196.6 56.0 193.8 56.0ZM195.9 51.8Q197.6 51.8 198.7 50.9Q199.7 50.0 199.7 48.6V46.4H195.5Q194.2 46.4 193.4 47.1Q192.6 47.8 192.6 49.1Q192.6 50.3 193.5 51.1Q194.4 51.8 195.9 51.8Z M208.9 55.6V34.7H214.4V38.7H214.5Q214.8 37.0 215.9 35.9Q217.4 34.3 220.0 34.3Q223.0 34.3 224.9 36.5Q226.7 38.6 226.7 42.1V55.6H221.0V42.7Q221.0 41.1 220.2 40.2Q219.3 39.3 217.8 39.3Q216.2 39.3 215.4 40.2Q214.6 41.1 214.6 42.7V55.6Z"/></svg>';
 function renderMore(){
