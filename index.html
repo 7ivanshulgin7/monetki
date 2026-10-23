@@ -225,6 +225,11 @@ nav button[aria-current="page"]{color:var(--accent);font-weight:600}
 .chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;min-height:34px}
 .chip[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);font-weight:600}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
+.adcalc{background:var(--sunk);border-radius:14px;padding:8px;display:flex;flex-direction:column;gap:6px}
+.addisp{font-size:22px;text-align:right;padding:2px 6px;color:var(--muted)}.addisp .cur{color:var(--fg);border-bottom:2px solid var(--accent)}.addisp b{color:var(--fg)}
+.adkeys{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}.adkeys button{height:38px;border:0;border-radius:9px;background:var(--surface);color:var(--fg);font:inherit;font-size:18px;font-weight:600}.adkeys .op{background:var(--accent-soft);color:var(--accent)}
+.adleg{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:2px;margin-top:4px}.adleg b{color:var(--fg)}
+.adr>b{width:40px;text-align:right}
 .adr{display:flex;align-items:center;gap:8px}.adr>span{width:14px;font-weight:700;color:var(--muted)}.adr input{width:58px;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:8px;padding:5px 6px;font-size:16px;text-align:right}
 .adr.sum>b{width:58px;text-align:right;font-size:17px}.adb{display:flex;gap:3px;margin-left:auto}
 .adb button,.adb i{width:26px;height:30px;border-radius:7px;border:0;background:var(--sunk);color:var(--muted);font:inherit;font-weight:700;font-style:normal;display:flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
@@ -1431,10 +1436,10 @@ function smoothPath(P){
 function renderStats(){
   if(S&&S.ops.length&&!statDetail){const m=statMonth,isCur=m===ym(today());
     $('stats').classList.add('fit');
-    $('stats').innerHTML='<div class="shead"><h1>Аналитика</h1><div class="month" style="padding:0"><button id="s-prev" aria-label="Предыдущий месяц">‹</button><b>'+monthLabel(m)+'</b><button id="s-next" aria-label="Следующий месяц"'+(isCur?' disabled':'')+'>›</button></div></div>'+richSummary(m);
+    $('stats').innerHTML='<div class="shead"><h1>Аналитика</h1><button class="x" id="s-adder" aria-label="Калькулятор" style="margin-left:2px;font-size:16px;width:30px;height:30px;min-height:0;padding:0">🧮</button><div class="month" style="padding:0"><button id="s-prev" aria-label="Предыдущий месяц">‹</button><b>'+monthLabel(m)+'</b><button id="s-next" aria-label="Следующий месяц"'+(isCur?' disabled':'')+'>›</button></div></div>'+richSummary(m);
     $('s-prev').onclick=()=>{statMonth=addMonth(statMonth,-1);renderStats()};
     $('s-next').onclick=()=>{if(!isCur){statMonth=addMonth(statMonth,1);renderStats()}};
-    $('s-detail').onclick=()=>{setDetail(true);renderStats()};$('s-life').onclick=openLife;
+    $('s-detail').onclick=()=>{setDetail(true);renderStats()};$('s-adder').onclick=()=>openAdder();$('s-life').onclick=openLife;
     if($('lay-more'))$('lay-more').onclick=()=>{layOpen=!layOpen;try{localStorage.setItem('monetki.layOpen',layOpen?'1':'0')}catch(e){}renderStats()};
     $('stats').querySelectorAll('[data-act^="dyn:"]').forEach(x=>x.onclick=()=>openDyn(x.dataset.act.slice(4)));return}
   $('stats').classList.remove('fit');
@@ -1523,9 +1528,7 @@ function renderStats(){
      lay.obl?LAYERS.obl.n.toLowerCase()+' — '+Math.round(lay.obl/lsum*100)+'% трат':'');
   h+='<div class="month" style="padding:0"><button id="s-prev" aria-label="Предыдущий месяц">‹</button><b>'+monthLabel(m)+'</b><button id="s-next" aria-label="Следующий месяц"'+(isCur?' disabled':'')+'>›</button></div>';
   h+=statOrder.map(k=>B[k]||'').join('');
-  h+=statEdit?'':'<button class="btn" id="s-adder" style="width:100%">🧮 Двоичный сумматор — как компьютер складывает</button>';
   $('stats').innerHTML=h;
-  if($('s-adder'))$('s-adder').onclick=()=>openAdder();
   $('stats').querySelectorAll('details[data-asec]').forEach(d=>d.addEventListener('toggle',()=>{d.open?statOpen.add(d.dataset.asec):statOpen.delete(d.dataset.asec);try{localStorage.setItem('monetki.statOpen',JSON.stringify([...statOpen]))}catch(e){}}));
   $('stats').querySelectorAll('[data-tspan]').forEach(b=>b.onclick=()=>{typeSpan=+b.dataset.tspan;typeSel=null;renderStats()});
   $('stats').querySelectorAll('[data-tm]').forEach(b=>b.onclick=()=>{typeSel=+b.dataset.tm;renderStats()});
@@ -1615,7 +1618,7 @@ function openLife(){
   draw();
 }
 /* ---------- двоичный сумматор: 8 полных сумматоров цепочкой (перенос бежит от младшего бита к старшему) ---------- */
-let ADD={a:105,b:89};
+let ADD={a:0,b:0,f:'a'};
 function openAdder(){
   const N=8,W=360,H=90,top=6;
   const bit=(v,i)=>(v>>i)&1;
@@ -1646,6 +1649,9 @@ function openAdder(){
       // сумма
       svg+=wire('M190,'+Y(24)+'H318',r.S)+'<circle cx="330" cy="'+Y(24)+'" r="12" fill="'+(r.S?on:'var(--sunk)')+'"/><text x="330" y="'+Y(28)+'" font-size="13" font-weight="700" text-anchor="middle" fill="'+(r.S?'#fff':'var(--muted)')+'">'+r.S+'</text>'+
         '<text x="330" y="'+Y(48)+'" font-size="8" text-anchor="middle" fill="var(--muted)">s'+i+'</text>';
+      // маленькие пометки: на первом этаже — что делает каждый кусок, ниже — только «несу 1», когда он есть
+      if(i===0)svg+='<text x="72" y="'+Y(45)+'" font-size="7" fill="var(--muted)">разные?</text><text x="76" y="'+Y(82)+'" font-size="7" fill="var(--muted)">обе?</text><text x="174" y="'+Y(5)+'" font-size="7" fill="var(--muted)">+ перенос</text><text x="228" y="'+Y(26)+'" font-size="7" fill="var(--muted)">хоть один?</text><text x="330" y="'+Y(60)+'" font-size="7" text-anchor="middle" fill="var(--muted)">ответ</text>';
+      if(r.co&&i<N-1)svg+='<text x="276" y="'+Y(78)+'" font-size="8" font-weight="700" fill="var(--accent)">несу 1 ↓</text>';
       // перенос дальше
       svg+=wire('M256,'+Y(44)+'H270V'+Y(86)+(i<N-1?'H145':'H300V'+Y(86)),r.co);
       svg+=G('xor',70,Y(24),r.s1)+G('and',70,Y(60),r.c1)+G('xor',160,Y(24),r.S)+G('and',160,Y(60),r.c2)+G('or',226,Y(44),r.co);
@@ -1653,16 +1659,23 @@ function openAdder(){
     });
     const last=rows[N-1].co,yl=top+(N-1)*H+86;
     svg+='<circle cx="300" cy="'+yl+'" r="3" fill="'+(last?'var(--bad)':off)+'"/><text x="306" y="'+(yl+4)+'" font-size="10" fill="'+(last?'var(--bad)':'var(--muted)')+'">перенос '+last+(last?' → s8 = 1':'')+'</text>';
-    const bits=(v,k)=>'<div class="adb">'+[...Array(N)].map((_,j)=>{const i=N-1-j;return '<button data-ab="'+k+i+'" aria-pressed="'+!!bit(v,i)+'">'+bit(v,i)+'</button>'}).join('')+'</div>';
+    const bits=v=>'<div class="adb">'+[...Array(N)].map((_,j)=>{const i=N-1-j;return '<i class="'+(bit(v,i)?'on':'')+'">'+bit(v,i)+'</i>'}).join('')+'</div>';
     $('panel').innerHTML='<div class="row"><b class="grow">🧮 Двоичный сумматор</b><button class="x" id="ad-close" aria-label="Закрыть">✕</button></div>'+
-      '<div class="sub" style="font-size:13px">Тапай по битам или впиши числа 0–255. Каждая строка — полный сумматор: два XOR, два И и ИЛИ. Зелёные провода — единица, перенос бежит вниз от младшего бита к старшему.</div>'+
-      '<div class="adr"><span>A</span><input id="ad-a" inputmode="numeric" value="'+a+'">'+bits(a,'a')+'</div>'+
-      '<div class="adr"><span>B</span><input id="ad-b" inputmode="numeric" value="'+b+'">'+bits(b,'b')+'</div>'+
+      '<div class="adcalc"><div class="addisp num"><span'+(ADD.f==='a'?' class="cur"':'')+'>'+a+'</span> + <span'+(ADD.f==='b'?' class="cur"':'')+'>'+b+'</span> = <b>'+sum+'</b></div>'+
+        '<div class="adkeys">'+['7','8','9','C','4','5','6','+','1','2','3','⌫','0'].map(k=>'<button data-ak="'+k+'"'+(/\d/.test(k)?'':' class="op"')+(k==='0'?' style="grid-column:span 4"':'')+'>'+k+'</button>').join('')+'</div></div>'+
+      '<div class="sub" style="font-size:12px;margin-top:2px">Так эти же числа видит компьютер — только нолики и единички:</div>'+
+      '<div class="adr"><span>A</span><b class="num">'+a+'</b>'+bits(a)+'</div>'+
+      '<div class="adr"><span>B</span><b class="num">'+b+'</b>'+bits(b)+'</div>'+
       '<div class="adr sum"><span>=</span><b class="num">'+sum+'</b><div class="adb">'+[...Array(N+1)].map((_,j)=>{const i=N-j;return '<i class="'+(bit(sum,i)?'on':'')+'">'+bit(sum,i)+'</i>'}).join('')+'</div></div>'+
-      '<svg viewBox="0 0 '+W+' '+(top+N*H+4)+'" width="100%" style="display:block;font-family:inherit">'+svg+'</svg>';
+      '<div class="adleg"><div><b>XOR</b> «разные?» — 1 и 0 дают 1, а две одинаковые — 0</div><div><b>И</b> «обе единички?» — тогда в эту клетку не влезает, надо перенести</div><div><b>ИЛИ</b> «есть хоть один перенос?» — передаём единичку следующему этажу</div><div><span style="color:var(--accent)">━</span> зелёный провод — бежит единичка, серый — ноль</div></div>'+
+      '<svg viewBox="0 0 '+W+' '+(top+N*H+4)+'" width="100%" style="display:block;flex:none;font-family:inherit">'+svg+'</svg>';
     $('sheet').hidden=false;$('ad-close').onclick=closeSheet;
-    $('panel').querySelectorAll('[data-ab]').forEach(x=>x.onclick=()=>{const k=x.dataset.ab[0],i=+x.dataset.ab.slice(1);ADD[k]^=1<<i;draw()});
-    ['a','b'].forEach(k=>{const f=$('ad-'+k);f.onchange=()=>{ADD[k]=Math.max(0,Math.min(255,parseInt(f.value)||0));draw()}});
+    $('panel').querySelectorAll('[data-ak]').forEach(x=>x.onclick=()=>{const k=x.dataset.ak,f=ADD.f;
+      if(/\d/.test(k)){const v=ADD[f]*10+ +k;if(v>255){toast('Сумматор 8-битный: числа до 255');return}ADD[f]=v}
+      else if(k==='⌫')ADD[f]=Math.floor(ADD[f]/10);
+      else if(k==='+')ADD.f='b';
+      else if(k==='C'){ADD={a:0,b:0,f:'a'}}
+      draw()});
   };
   draw();
 }
@@ -1709,7 +1722,7 @@ function catSpend(id,m){let s=0;for(const o of S.ops){if(ym(o.d)!==m)continue;if
 
 /* ---------- ещё ---------- */
 // Версия приложения: поднимать вместе с CACHE в sw.js — видно внизу «Ещё», пришло ли обновление
-const APP_VER='102 от 24.10.2026';
+const APP_VER='103 от 24.10.2026';
 // Подпись автора: знак T/V + itivan (inline SVG, цвет текста берётся из темы)
 const SIG='<svg class="sig" viewBox="0 2 229 80" role="img" aria-label="itivan" style="height:24px;width:auto;display:block;overflow:visible"><svg x="2" y="5" width="80" height="74" viewBox="40 0 220 160"><polyline class="vo" points="64,-20 150,172 236,-20" fill="none" stroke-width="42"/><polyline points="64,-20 150,172 236,-20" fill="none" stroke="#FF2E93" stroke-width="30"/><line x1="52" y1="15" x2="248" y2="15" stroke-width="50" style="stroke:var(--bg)"/><line x1="150" y1="0" x2="150" y2="170" stroke-width="50" style="stroke:var(--bg)"/><line x1="62" y1="15" x2="238" y2="15" stroke-width="30" style="stroke:currentColor"/><line x1="150" y1="0" x2="150" y2="160" stroke-width="30" style="stroke:currentColor"/></svg><path fill="currentColor" d="M102.6 55.6V50.5H109.8V39.9H103.6V34.7H115.2V50.5H121.2V55.6ZM112.1 31.4Q110.6 31.4 109.6 30.6Q108.7 29.8 108.7 28.5Q108.7 27.1 109.6 26.3Q110.6 25.5 112.1 25.5Q113.7 25.5 114.6 26.3Q115.5 27.1 115.5 28.5Q115.5 29.8 114.6 30.6Q113.7 31.4 112.1 31.4Z M134.9 55.6Q131.7 55.6 129.9 53.8Q128.1 52.0 128.1 48.8V39.9H122.6V34.7H128.1V28.8H133.8V34.7H141.6V39.9H133.8V48.8Q133.8 50.5 135.5 50.5H141.2V55.6Z M145.2 55.6V50.5H152.4V39.9H146.1V34.7H157.7V50.5H163.8V55.6ZM154.7 31.4Q153.1 31.4 152.2 30.6Q151.2 29.8 151.2 28.5Q151.2 27.1 152.2 26.3Q153.1 25.5 154.7 25.5Q156.2 25.5 157.2 26.3Q158.1 27.1 158.1 28.5Q158.1 29.8 157.2 30.6Q156.2 31.4 154.7 31.4Z M171.7 55.6 164.8 34.7H170.7L174.2 46.5Q174.5 47.5 174.8 48.8Q175.1 50.0 175.3 50.8Q175.5 50.0 175.7 48.8Q176.0 47.5 176.3 46.5L179.8 34.7H185.6L178.8 55.6Z M193.8 56.0Q190.6 56.0 188.8 54.3Q186.9 52.6 186.9 49.7Q186.9 46.5 189.1 44.8Q191.3 43.1 195.4 43.1H199.7V41.6Q199.7 40.4 198.9 39.6Q198.0 38.9 196.6 38.9Q195.3 38.9 194.4 39.5Q193.5 40.1 193.3 41.2H187.8Q188.1 38.0 190.6 36.2Q193.0 34.3 196.8 34.3Q200.8 34.3 203.1 36.3Q205.4 38.3 205.4 41.6V55.6H199.9V52.2H199.8Q199.5 53.7 198.3 54.6Q196.6 56.0 193.8 56.0ZM195.9 51.8Q197.6 51.8 198.7 50.9Q199.7 50.0 199.7 48.6V46.4H195.5Q194.2 46.4 193.4 47.1Q192.6 47.8 192.6 49.1Q192.6 50.3 193.5 51.1Q194.4 51.8 195.9 51.8Z M208.9 55.6V34.7H214.4V38.7H214.5Q214.8 37.0 215.9 35.9Q217.4 34.3 220.0 34.3Q223.0 34.3 224.9 36.5Q226.7 38.6 226.7 42.1V55.6H221.0V42.7Q221.0 41.1 220.2 40.2Q219.3 39.3 217.8 39.3Q216.2 39.3 215.4 40.2Q214.6 41.1 214.6 42.7V55.6Z"/></svg>';
 function renderMore(){
