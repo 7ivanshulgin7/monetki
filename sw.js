@@ -1,6 +1,6 @@
 // Офлайн-кэш. При обновлении сайта поднять версию в CACHE.
-const CACHE = "monetki-v118";
-const FILES = ["./", "index.html", "manifest.json", "icon-180.png", "icon-192.png", "icon-512.png"];
+const CACHE = "monetki-v119";
+const FILES = ["./", "index.html", "manifest.json", "icon-180.png", "icon-192.png", "icon-512.png", "badge-96.png"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
@@ -61,7 +61,7 @@ self.addEventListener("push", e => {
   const evil = d.s === "evil" || d.t === "again";
   e.waitUntil(self.registration.showNotification(evil ? "Монетки 😈" : "Монетки", {
     body: nagText(d.t, d.s, +d.n || 0),
-    icon: "icon-192.png", badge: "icon-192.png", tag: "daily", renotify: true, data: { url: "./" }
+    icon: "icon-192.png", badge: "badge-96.png", tag: "daily", renotify: true, data: { url: "./" }
   }));
 });
 self.addEventListener("notificationclick", e => {
