@@ -1,5 +1,5 @@
 // Офлайн-кэш. При обновлении сайта поднять версию в CACHE.
-const CACHE = "monetki-v119";
+const CACHE = "monetki-v120";
 const FILES = ["./", "index.html", "manifest.json", "icon-180.png", "icon-192.png", "icon-512.png", "badge-96.png"];
 
 self.addEventListener("install", e => {
