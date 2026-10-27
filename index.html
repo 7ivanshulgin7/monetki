@@ -112,6 +112,7 @@ button,a,label,input,select,summary,[role=button]{touch-action:manipulation}
 .ms-tips div{display:flex;gap:8px;align-items:center}.ms-tips svg{flex:none}.ms-tips .grow{flex:1;min-width:0}
 .ms-btn{border:0;border-radius:8px;padding:5px 10px;font:inherit;font-size:13px;font-weight:600;background:var(--sunk);color:var(--fg);white-space:nowrap;cursor:pointer}.ms-btn.pr{background:var(--accent);color:var(--accent-ink)}
 #msum .ms-btn{background:transparent;border:1px solid var(--line);color:var(--fg);font-weight:500;padding:4px 10px}#msum .ms-btn.pr{border-color:var(--accent);color:var(--accent)}
+.avg3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.avg3>div{display:flex;flex-direction:column;min-width:0}.avg3>div:nth-child(2){align-items:center}.avg3>div:nth-child(3){align-items:flex-end}.avg3 .sub{font-size:12px}.avg3 b{font-size:15px;font-weight:600;white-space:nowrap}
 .tr{display:flex;flex-direction:column}
 .tr .tn{display:flex;align-items:center;gap:8px;font-size:14px;min-height:22px;position:relative;padding-left:22px}
 .tr .tn::before{content:'';position:absolute;left:7px;top:0;bottom:0;border-left:1.5px solid var(--line)}
@@ -120,7 +121,7 @@ button,a,label,input,select,summary,[role=button]{touch-action:manipulation}
 .tr .tn.s{padding-left:66px;font-size:12.5px;min-height:18px}.tr .tn.s::before{left:51px;bottom:0}.tr .tn.s.cl::before{bottom:50%}.tr .tn.s::after{left:51px;top:50%;width:9px}
 .tr .tn.s b{font-weight:400;color:var(--muted)}.tr .tn.c::before{left:29px;bottom:0}.tr .tn.c.cl::before{bottom:50%}.tr .tn.c::after{left:29px;top:50%;width:9px}
 .tr .tn.c b{font-weight:500}
-.lay-more{border:0;background:var(--sunk);color:var(--muted);font:inherit;font-size:12px;line-height:1.2;padding:1px 8px;border-radius:7px;display:flex;align-items:center;gap:4px}.tr2 .tn:last-child::before{bottom:auto;height:11px}
+.lay-more{position:absolute;top:30px;right:14px;width:26px;height:26px;border-radius:50%;border:0;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;padding:0}.tr2 .tn:last-child::before{bottom:auto;height:11px}
 .tr .tn::after{content:'';position:absolute;left:7px;top:11px;width:10px;border-top:1.5px solid var(--line)}
 .tr .tn>i{width:9px;height:9px;border-radius:3px;flex:none}
 .tr .tn .grow,.troot .grow{flex:1;min-width:0;color:var(--muted)}.troot .grow{color:var(--fg)}.tr .tn b{font-weight:600;white-space:nowrap}
@@ -725,14 +726,16 @@ const pushSt=()=>{try{return JSON.parse(localStorage.getItem('monetki.push'))||{
 const pushSave=v=>{try{localStorage.setItem('monetki.push',JSON.stringify(v))}catch(e){}};
 const b64u8=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')+'==='.slice((s.length+3)%4)),c=>c.charCodeAt(0));
 const pushPost=(path,body)=>fetch(PUSH.url+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());
-async function pushOn(time){
+const PUSH_DEF={time:'21:00',days:[0,1,2,3,4,5,6],style:'kind',again:true,missed:true};
+const pushCfg=()=>Object.assign({},PUSH_DEF,pushSt());
+async function pushOn(cfg){if(typeof cfg==='string')cfg=Object.assign(pushCfg(),{time:cfg});const {time,days,style,again,missed}=cfg;
   if(await Notification.requestPermission()!=='granted'){toast('Разреши уведомления в настройках браузера');return false}
   const reg=await navigator.serviceWorker.ready;
   const sub=(await reg.pushManager.getSubscription())||await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u8(PUSH.key)});
-  const r=await pushPost('/subscribe',{sub:sub.toJSON(),time,tz:Intl.DateTimeFormat().resolvedOptions().timeZone||'Europe/Moscow'});
-  if(!r.id)throw 0;pushSave({id:r.id,time,pinged:''});pushPing();return true}
+  const r=await pushPost('/subscribe',{sub:sub.toJSON(),time,days,style,again,missed,tz:Intl.DateTimeFormat().resolvedOptions().timeZone||'Europe/Moscow'});
+  if(!r.id)throw 0;pushSave({id:r.id,time,days,style,again,missed,pinged:''});pushPing();return true}
 async function pushOff(){const st=pushSt();try{const reg=await navigator.serviceWorker.ready,sub=await reg.pushManager.getSubscription();if(sub)await sub.unsubscribe()}catch(e){}
-  if(st.id)pushPost('/unsubscribe',{id:st.id}).catch(()=>{});pushSave({})}
+  if(st.id)pushPost('/unsubscribe',{id:st.id}).catch(()=>{});const {time,days,style,again,missed}=pushCfg();pushSave({time,days,style,again,missed})}
 // «сегодня уже записал» — сервер не будет напоминать; уходит только дата, без сумм
 function pushPing(){if(!pushOk()||!S)return;const st=pushSt(),d=today();if(!st.id||st.pinged===d)return;
   if(!(dayHasOps(d)||(S.quiet||[]).includes(d)))return;
@@ -944,9 +947,9 @@ function avgCard(m){
   const cats=S.items.filter(x=>x.g==='exp').map(c=>({c,v:catSpend(c.id,m),a:prev.reduce((s,x)=>s+catSpend(c.id,x),0)/n})).filter(x=>x.v>0).sort((a,b)=>b.v-a.v).slice(0,3);
   const cmax=Math.max(1,...cats.map(x=>Math.max(x.v,x.a)));
   const barRow=(name,val,col,w,bc,extra)=>'<div '+(extra||'class="tn"')+'><span class="grow">'+name+'</span><b class="num"'+(col?' style="color:'+col+'"':'')+'>'+val+'</b><div class="bar">'+w.map(([x,c])=>'<i style="width:'+Math.max(1,x*100)+'%;background:'+c+'"></i>').join('')+'</div></div>';
-  return '<div class="card rich"><h2 style="margin:0;font-size:15px">Обычно за месяц <span class="sub" style="font-weight:400">· среднее за '+n+' мес.</span></h2>'+
-    '<div class="tr tr2">'+barRow('Зарабатываешь',rub(aI),null,[[aI/mx,'var(--in)']])+barRow('Тратишь',rub(aE),null,[[aE/mx,'var(--exp)']])+
-      barRow((aN>=0?'Остаётся':'Не хватает')+' <span class="sub">· в плюсе '+plus+' из '+n+'</span>',(aN>=0?'+':'−')+rub(Math.abs(aN)),aN>=0?'var(--good)':'var(--bad)',[[Math.abs(aN)/mx,aN>=0?'var(--good)':'var(--bad)']])+'</div>'+
+  // обычный месяц — три простые цифры без полосок
+  return '<div class="card rich"><h2 style="margin:0;font-size:15px">Обычно за месяц <span class="sub" style="font-weight:400">· в среднем</span></h2>'+
+    '<div class="avg3"><div><span class="sub">Доход</span><b class="num">'+rub(aI)+'</b></div><div><span class="sub">Траты</span><b class="num">'+rub(aE)+'</b></div><div><span class="sub">'+(aN>=0?'Остаётся':'Не хватает')+'</span><b class="num" style="color:'+(aN>=0?'var(--good)':'var(--bad)')+'">'+(aN>=0?'+':'−')+rub(Math.abs(aN))+'</b></div></div>'+
     (cats.length?'<div class="troot"><span class="grow">Больше всего в этом месяце</span><span class="sub">сейчас / обычно</span></div>'+
       '<div class="tr tr2">'+cats.map(x=>barRow('<span style="color:var(--fg)">'+esc(x.c.name)+'</span>',rub(x.v)+' <span class="sub" style="font-weight:400">/ '+fmt(x.a)+'</span>',null,[[x.a/cmax,'var(--line)'],[x.v/cmax,x.v>x.a*1.05?'var(--bad)':'var(--accent)']],null,' class="tn tlink" data-act="dyn:'+x.c.id+'"')).join('')+'</div>':'')+
     '</div>';
@@ -961,8 +964,8 @@ function richSummary(m){
   const by={};for(const o of S.ops){if(ym(o.d)!==m)continue;const a=byId(o.from),b=byId(o.to);if(a&&a.g==='in')by[a.id]=(by[a.id]||0)+o.sum;if(b&&b.g==='in')by[b.id]=(by[b.id]||0)-o.sum}
   let inc=Object.entries(by).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);if(inc.length>3)inc=[...inc.slice(0,2),['_',inc.slice(2).reduce((a,x)=>a+x[1],0)]];const it=inc.reduce((a,x)=>a+x[1],0)||1;
   const shade=i=>[100,70,48,30][Math.min(i,3)];
-  return '<div class="card rich">'+
-    '<div class="ms-two"><div><span class="sub" style="display:flex;align-items:center;gap:8px">Потрачено'+(LK.length?'<button class="lay-more" id="lay-more" aria-expanded="'+layOpen+'">'+(layOpen?'Свернуть':'Подробно')+' <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="'+(layOpen?'M6 15l6-6 6 6':'M6 9l6 6 6-6')+'"/></svg></button>':'')+'</span><b class="num">'+rub(F.now)+'</b></div><div><span class="sub">'+(F.isCur?'Обычно к '+F.day+'-му':'Обычно за месяц')+'</span><b class="num" style="color:var(--muted)">'+(F.usual?rub(F.usual):'—')+'</b></div></div>'+
+  return '<div class="card rich" style="position:relative">'+(LK.length?'<button class="lay-more" id="lay-more" aria-expanded="'+layOpen+'" aria-label="'+(layOpen?'Свернуть':'Подробно по категориям')+'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="'+(layOpen?'M6 15l6-6 6 6':'M6 9l6 6 6-6')+'"/></svg></button>':'')+
+    '<div class="ms-two"><div><span class="sub" style="display:flex;align-items:center;gap:8px">Потрачено'+'</span><b class="num">'+rub(F.now)+'</b></div><div><span class="sub">'+(F.isCur?'Обычно к '+F.day+'-му':'Обычно за месяц')+'</span><b class="num" style="color:var(--muted)">'+(F.usual?rub(F.usual):'—')+'</b></div></div>'+
     (F.usual?'<div class="trow"><div class="track"><i style="width:'+Math.min(100,F.r*100)+'%;background:'+(F.r>1.05?'var(--bad)':'var(--accent)')+'"></i></div><span style="color:'+F.vcol+'">'+(Math.abs(F.r-1)<.05?'как обычно':(F.r<1?'−':'+')+Math.round(Math.abs(F.r-1)*100)+'%')+'</span></div>':'')+
     (LK.length?'<div class="ms-lay">'+LK.map(k=>'<i style="width:'+(F.lay[k]/lt*100)+'%;background:var('+LAYERS[k].c+')"></i>').join('')+'</div>'+
       '<div class="tr'+(layOpen?' open':'')+'">'+LK.map((k,i)=>{const last=i===LK.length-1;
@@ -1449,10 +1452,10 @@ function smoothPath(P){
 function renderStats(){
   if(S&&S.ops.length&&!statDetail){const m=statMonth,isCur=m===ym(today());
     $('stats').classList.add('fit');
-    $('stats').innerHTML='<div class="shead"><h1>Аналитика</h1><button class="x" id="s-adder" aria-label="Калькулятор" style="margin-left:2px;font-size:16px;width:30px;height:30px;min-height:0;padding:0">🧮</button><div class="month" style="padding:0"><button id="s-prev" aria-label="Предыдущий месяц">‹</button><b>'+monthLabel(m)+'</b><button id="s-next" aria-label="Следующий месяц"'+(isCur?' disabled':'')+'>›</button></div></div>'+richSummary(m);
+    $('stats').innerHTML='<div class="shead"><h1>Аналитика</h1><div class="month" style="padding:0"><button id="s-prev" aria-label="Предыдущий месяц">‹</button><b>'+monthLabel(m)+'</b><button id="s-next" aria-label="Следующий месяц"'+(isCur?' disabled':'')+'>›</button></div></div>'+richSummary(m);
     $('s-prev').onclick=()=>{statMonth=addMonth(statMonth,-1);renderStats()};
     $('s-next').onclick=()=>{if(!isCur){statMonth=addMonth(statMonth,1);renderStats()}};
-    $('s-detail').onclick=()=>{setDetail(true);renderStats()};$('s-adder').onclick=()=>openAdder();$('s-life').onclick=openLife;
+    $('s-detail').onclick=()=>{setDetail(true);renderStats()};$('s-life').onclick=openLife;
     if($('lay-more'))$('lay-more').onclick=()=>{layOpen=!layOpen;try{localStorage.setItem('monetki.layOpen',layOpen?'1':'0')}catch(e){}renderStats()};
     $('stats').querySelectorAll('[data-act^="dyn:"]').forEach(x=>x.onclick=()=>openDyn(x.dataset.act.slice(4)));return}
   $('stats').classList.remove('fit');
@@ -1785,12 +1788,21 @@ function catSpend(id,m){let s=0;for(const o of S.ops){if(ym(o.d)!==m)continue;if
 
 /* ---------- ещё ---------- */
 // Версия приложения: поднимать вместе с CACHE в sw.js — видно внизу «Ещё», пришло ли обновление
-const APP_VER='108 от 27.10.2026';
+const APP_VER='113 от 27.10.2026';
 // Подпись автора: знак T/V + itivan (inline SVG, цвет текста берётся из темы)
 const SIG='<svg class="sig" viewBox="0 2 229 80" role="img" aria-label="itivan" style="height:24px;width:auto;display:block;overflow:visible"><svg x="2" y="5" width="80" height="74" viewBox="40 0 220 160"><polyline class="vo" points="64,-20 150,172 236,-20" fill="none" stroke-width="42"/><polyline points="64,-20 150,172 236,-20" fill="none" stroke="#FF2E93" stroke-width="30"/><line x1="52" y1="15" x2="248" y2="15" stroke-width="50" style="stroke:var(--bg)"/><line x1="150" y1="0" x2="150" y2="170" stroke-width="50" style="stroke:var(--bg)"/><line x1="62" y1="15" x2="238" y2="15" stroke-width="30" style="stroke:currentColor"/><line x1="150" y1="0" x2="150" y2="160" stroke-width="30" style="stroke:currentColor"/></svg><path fill="currentColor" d="M102.6 55.6V50.5H109.8V39.9H103.6V34.7H115.2V50.5H121.2V55.6ZM112.1 31.4Q110.6 31.4 109.6 30.6Q108.7 29.8 108.7 28.5Q108.7 27.1 109.6 26.3Q110.6 25.5 112.1 25.5Q113.7 25.5 114.6 26.3Q115.5 27.1 115.5 28.5Q115.5 29.8 114.6 30.6Q113.7 31.4 112.1 31.4Z M134.9 55.6Q131.7 55.6 129.9 53.8Q128.1 52.0 128.1 48.8V39.9H122.6V34.7H128.1V28.8H133.8V34.7H141.6V39.9H133.8V48.8Q133.8 50.5 135.5 50.5H141.2V55.6Z M145.2 55.6V50.5H152.4V39.9H146.1V34.7H157.7V50.5H163.8V55.6ZM154.7 31.4Q153.1 31.4 152.2 30.6Q151.2 29.8 151.2 28.5Q151.2 27.1 152.2 26.3Q153.1 25.5 154.7 25.5Q156.2 25.5 157.2 26.3Q158.1 27.1 158.1 28.5Q158.1 29.8 157.2 30.6Q156.2 31.4 154.7 31.4Z M171.7 55.6 164.8 34.7H170.7L174.2 46.5Q174.5 47.5 174.8 48.8Q175.1 50.0 175.3 50.8Q175.5 50.0 175.7 48.8Q176.0 47.5 176.3 46.5L179.8 34.7H185.6L178.8 55.6Z M193.8 56.0Q190.6 56.0 188.8 54.3Q186.9 52.6 186.9 49.7Q186.9 46.5 189.1 44.8Q191.3 43.1 195.4 43.1H199.7V41.6Q199.7 40.4 198.9 39.6Q198.0 38.9 196.6 38.9Q195.3 38.9 194.4 39.5Q193.5 40.1 193.3 41.2H187.8Q188.1 38.0 190.6 36.2Q193.0 34.3 196.8 34.3Q200.8 34.3 203.1 36.3Q205.4 38.3 205.4 41.6V55.6H199.9V52.2H199.8Q199.5 53.7 198.3 54.6Q196.6 56.0 193.8 56.0ZM195.9 51.8Q197.6 51.8 198.7 50.9Q199.7 50.0 199.7 48.6V46.4H195.5Q194.2 46.4 193.4 47.1Q192.6 47.8 192.6 49.1Q192.6 50.3 193.5 51.1Q194.4 51.8 195.9 51.8Z M208.9 55.6V34.7H214.4V38.7H214.5Q214.8 37.0 215.9 35.9Q217.4 34.3 220.0 34.3Q223.0 34.3 224.9 36.5Q226.7 38.6 226.7 42.1V55.6H221.0V42.7Q221.0 41.1 220.2 40.2Q219.3 39.3 217.8 39.3Q216.2 39.3 215.4 40.2Q214.6 41.1 214.6 42.7V55.6Z"/></svg>';
 function renderMore(){
   let h='<h1>Настройки</h1>';
   h+=sec('guide','Как пользоваться<span class="sub sectsub">плохо, когда не знал, ещё и забыл</span>','',$('guide-tpl').innerHTML);
+  if(pushOk()){const c=pushCfg(),on=!!c.id,DN=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+    h+=sec('push','Напоминания',on?'в '+c.time+' · '+(c.style==='evil'?'злые 😈':'добрые 😇'):'выкл.',
+     '<div class="sub">Если за день ничего не записано — напомню. Записал — не побеспокою. На сервер уходит только дата последней записи, без сумм.</div>'+
+     '<div class="row" style="gap:8px"><label class="field grow">Во сколько<input type="time" id="p-time" value="'+c.time+'" step="300"></label></div>'+
+     '<div class="sub" style="margin-top:2px">По каким дням</div><div class="chips">'+DN.map((d,i)=>'<button class="chip" data-pd="'+i+'" aria-pressed="'+c.days.includes(i)+'">'+d+'</button>').join('')+'</div>'+
+     '<div class="sub" style="margin-top:6px">Характер</div><div class="chips"><button class="chip" data-ps="kind" aria-pressed="'+(c.style!=='evil')+'">😇 Добрый</button><button class="chip" data-ps="evil" aria-pressed="'+(c.style==='evil')+'">😈 Злой</button></div>'+
+     '<label class="chk" style="margin-top:8px"><input type="checkbox" id="p-again"'+(c.again?' checked':'')+'> Не записал — напомнить ещё раз через час</label>'+
+     '<label class="chk" style="margin-top:0"><input type="checkbox" id="p-missed"'+(c.missed?' checked':'')+'> Пропустил вчера — отдельно напомнить об этом</label>'+
+     (on?'<button class="btn" id="p-test">Прислать пробное</button><button class="btn" id="p-off">Выключить напоминания</button>':'<button class="btn primary" id="p-on">Включить напоминания</button>'));}
   if(S){
     for(const [g,t] of [['in','Доходы'],['acc','Счета'],['exp','Категории расходов']]){
       const list=S.items.filter(x=>x.g===g&&(!x.hidden||S.ops.some(o=>o.from===x.id||o.to===x.id)));
@@ -1815,11 +1827,6 @@ function renderMore(){
      '<div class="sub">У каждой категории и подкатегории есть тип. По нему аналитика показывает, какие траты обязательные, а какие можно урезать. Название типа можно поменять.</div>'+
      Object.keys(LAYERS).map(k=>'<div class="ltrow"><i style="background:var('+LAYERS[k].c+')"></i><div class="grow"><input data-ln="'+k+'" value="'+esc(LAYERS[k].n)+'" maxlength="20"><div class="sub">'+LAYER_HINT[k]+'</div></div></div>').join('')+
      '<button class="btn" id="m-ln">Сохранить названия</button>');
-  if(pushOk()){const st=pushSt(),on=!!st.id,tm=st.time||'21:00';
-    h+=sec('push','Напоминание вечером',on?'в '+tm:'выкл.',
-     '<div class="sub">Если за день ничего не записано, вечером придёт напоминание. Если уже записал — не побеспокоит. На сервер уходит только дата последней записи, без сумм.</div>'+
-     '<label class="field">Время<select id="p-time">'+['19:00','19:30','20:00','20:30','21:00','21:30','22:00','22:30','23:00'].map(t=>'<option'+(t===tm?' selected':'')+'>'+t+'</option>').join('')+'</select></label>'+
-     (on?'<button class="btn" id="p-test">Прислать пробное</button><button class="btn" id="p-off">Выключить напоминание</button>':'<button class="btn primary" id="p-on">Включить напоминание</button>'));}
   h+=sec('data','Данные',S?'операций: '+fmt(S.ops.length):'',
      '<div class="sub">Всё хранится только на этом телефоне. Делай копию время от времени.</div>'+
      (S?'<button class="btn primary" id="m-tidy">Навести порядок в категориях</button><button class="btn" id="m-csvout">Выгрузить в CSV (для Excel)</button>':'')+
@@ -1827,10 +1834,15 @@ function renderMore(){
   h+='<div style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 0 8px;color:var(--fg)">'+SIG+'<div class="sub">Монетки · бета · v'+APP_VER+'</div></div>';
   $('more').innerHTML=h;
   if($('p-time')){
-    if($('p-on'))$('p-on').onclick=async()=>{try{if(await pushOn($('p-time').value)){toast('Напоминание включено');renderMore()}}catch(e){toast('Не получилось включить. Приложение установлено на экран «Домой»?')}};
-    if($('p-off'))$('p-off').onclick=async()=>{await pushOff();toast('Напоминание выключено');renderMore()};
+    // настройки: меняем на месте; если напоминания включены — сразу отправляем на сервер
+    const cur=pushCfg(),apply=async(ch,msg)=>{const c=Object.assign(cur,ch);if(c.id){try{await pushOn(c);toast(msg||'Сохранено')}catch(_){toast('Не удалось сохранить')}}else pushSave(c);renderMore()};
+    $('more').querySelectorAll('[data-pd]').forEach(b=>b.onclick=()=>{const i=+b.dataset.pd,d=cur.days.includes(i)?cur.days.filter(x=>x!==i):[...cur.days,i].sort();if(!d.length){toast('Хотя бы один день');return}apply({days:d})});
+    $('more').querySelectorAll('[data-ps]').forEach(b=>b.onclick=()=>apply({style:b.dataset.ps},b.dataset.ps==='evil'?'Теперь без поблажек 😈':'Буду помягче 😇'));
+    $('p-again').onchange=e=>apply({again:e.target.checked});$('p-missed').onchange=e=>apply({missed:e.target.checked});
+    if($('p-on'))$('p-on').onclick=async()=>{try{if(await pushOn(Object.assign(cur,{time:$('p-time').value}))){toast('Напоминания включены');renderMore()}}catch(e){toast('Не получилось включить. Приложение установлено на экран «Домой»?')}};
+    if($('p-off'))$('p-off').onclick=async()=>{await pushOff();toast('Напоминания выключены');renderMore()};
     if($('p-test'))$('p-test').onclick=()=>pushPost('/test',{id:pushSt().id}).then(r=>toast(r.status<300?'Отправлено — сейчас придёт':'Сервер ответил '+(r.status||r.error))).catch(()=>toast('Нет связи с сервером'));
-    $('p-time').onchange=async e=>{if(pushSt().id){try{await pushOn(e.target.value);toast('Напомню в '+e.target.value);renderMore()}catch(_){toast('Не удалось сохранить время')}}};
+    $('p-time').onchange=e=>{if(/^\d{2}:\d{2}$/.test(e.target.value))apply({time:e.target.value},'Напомню в '+e.target.value)};
   }
   $('more').querySelectorAll('details').forEach(d=>d.addEventListener('toggle',()=>{d.open?openSecs.add(d.dataset.sec):openSecs.delete(d.dataset.sec);if(d.open&&d.dataset.sec==='guide'){try{localStorage.setItem('monetki.guideSeen','1')}catch(e){}}}));
   $('more').querySelectorAll('[data-item]').forEach(b=>b.onclick=()=>openItemEdit(b.dataset.item));
