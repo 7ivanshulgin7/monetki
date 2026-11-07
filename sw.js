@@ -1,5 +1,5 @@
 // Офлайн-кэш. При обновлении сайта поднять версию в CACHE.
-const CACHE = "monetki-v126";
+const CACHE = "monetki-v127";
 const FILES = ["./", "index.html", "manifest.json", "icon-180.png", "icon-192.png", "icon-512.png", "badge-96.png"];
 
 self.addEventListener("install", e => {
@@ -18,18 +18,13 @@ self.addEventListener("fetch", e => {
     return;
   }
   if (url.origin !== location.origin) return;
-  // Свои файлы: пробуем сеть, но ждём не дольше 1,5 с — дальше открываем из кэша,
-  // а свежая версия докачивается в фоне и будет при следующем запуске
-  const net = fetch(req).then(r => {
-    if (r.ok) { const copy = r.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
+  // Свои файлы: сразу из кэша — мгновенный запуск и без сети. Новая версия приходит с новым sw.js:
+  // браузер проверяет его сам, ставит новый кэш целиком, и со следующего запуска открывается новая версия.
+  const key = req.mode === "navigate" ? "index.html" : req;
+  e.respondWith(caches.open(CACHE).then(c => c.match(key).then(hit => hit || fetch(req).then(r => {
+    if (r.ok && req.mode !== "navigate") c.put(req, r.clone());
     return r;
-  });
-  e.waitUntil(net.catch(() => {}));
-  e.respondWith(caches.match(req).then(hit => {
-    if (!hit) return net.catch(() => caches.match("index.html"));
-    const late = new Promise(res => setTimeout(() => res(hit), 1500));
-    return Promise.race([net.catch(() => hit), late]);
-  }));
+  }).catch(() => caches.match(req, { ignoreSearch: true }).then(r => r || c.match("index.html"))))));
 });
 
 // Напоминание: сервер присылает {t: first|again|missed, s: kind|evil}, текст выбираем здесь
