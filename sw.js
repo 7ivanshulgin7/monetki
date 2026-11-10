@@ -1,20 +1,27 @@
 // Офлайн-кэш. При обновлении сайта поднять версию в CACHE.
-const CACHE = "monetki-v128";
+const CACHE = "monetki-v129";
 const FILES = ["./", "index.html", "manifest.json", "icon-180.png", "icon-192.png", "icon-512.png", "badge-96.png"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
 });
 self.addEventListener("activate", e => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE && k !== "monetki-fonts").map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 self.addEventListener("fetch", e => {
   const req = e.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
-  // Шрифты Google: из кэша, если есть
+  // Шрифты Google: из кэша; если их нет и сети нет (или она «висит») — через 2 с отдаём пустышку,
+  // иначе страница ждёт стиль шрифтов и не открывается. Шрифты кэшируем навсегда, между версиями тоже.
   if (url.host.endsWith("fonts.googleapis.com") || url.host.endsWith("fonts.gstatic.com")) {
-    e.respondWith(caches.open(CACHE).then(c => c.match(req).then(hit => hit || fetch(req).then(r => { c.put(req, r.clone()); return r; }))));
+    const css = url.host.endsWith("fonts.googleapis.com");
+    const empty = () => css ? new Response("", { headers: { "Content-Type": "text/css" } }) : Response.error();
+    e.respondWith(caches.open("monetki-fonts").then(c => c.match(req).then(hit => {
+      if (hit) return hit;
+      const net = fetch(req).then(r => { if (r.ok || r.type === "opaque") c.put(req, r.clone()); return r; });
+      return Promise.race([net, new Promise(res => setTimeout(res, 2000))]).then(r => r || empty()).catch(empty);
+    })));
     return;
   }
   if (url.origin !== location.origin) return;
