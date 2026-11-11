@@ -1,5 +1,5 @@
 // Офлайн-кэш. При обновлении сайта поднять версию в CACHE.
-const CACHE = "monetki-v130";
+const CACHE = "monetki-v131";
 const FILES = ["./", "index.html", "manifest.json", "icon-180.png", "icon-192.png", "icon-512.png", "badge-96.png"];
 
 // Ставим кэш по файлу: если какой-то не скачался (плохая сеть), установка не срывается целиком.
@@ -9,8 +9,10 @@ self.addEventListener("install", e => {
     .then(() => c.match("index.html")).then(hit => { if (!hit) throw new Error("index.html не скачался"); }))
     .then(() => self.skipWaiting()));
 });
+// Все PWA лежат на одном сайте 7ivanshulgin7.github.io и делят хранилище кэшей:
+// чистим только свои старые версии (monetki-v…), чужие (kk-, terapiya-…) и шрифты не трогаем.
 self.addEventListener("activate", e => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE && k !== "monetki-fonts").map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith("monetki-v") && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 const timeout = (p, ms) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error("timeout")), ms))]);
 // Если копии приложения нет совсем (например, браузер очистил кэш) — понятная заглушка вместо ERR_FAILED
