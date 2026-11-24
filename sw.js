@@ -1,5 +1,5 @@
 // Офлайн-кэш. При обновлении сайта поднять версию в CACHE.
-const CACHE = "monetki-v131";
+const CACHE = "monetki-v132";
 const FILES = ["./", "index.html", "manifest.json", "icon-180.png", "icon-192.png", "icon-512.png", "badge-96.png"];
 
 // Ставим кэш по файлу: если какой-то не скачался (плохая сеть), установка не срывается целиком.
