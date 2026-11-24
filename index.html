@@ -818,7 +818,8 @@ function spendingComparison(month,day){
   const prev=[1,2,3,4,5,6].map(k=>addMonth(month,-k)).filter(m=>S.ops.some(o=>ym(o.d)===m));
   const now=monthSpend(month);
   const usual=prev.length?prev.reduce((sum,m)=>sum+monthSpend(m,day),0)/prev.length:0;
-  return {prev,now,usual};
+  const throughToday=day===31?now:monthSpend(month,day);
+  return {prev,now,throughToday,usual};
 }
 function monthIncome(month){let s=0;const inc=new Set(S.items.filter(x=>x.g==='in').map(x=>x.id));for(const o of S.ops){if(ym(o.d)!==month)continue;if(inc.has(o.from))s+=o.sum;if(inc.has(o.to))s-=o.sum}return s}
 function regDone(r,month){return S.ops.some(o=>o.reg===r.id&&!o.pre&&ym(o.d)===month)}
@@ -867,7 +868,7 @@ const MS_IC={"fc": "<path d=\"M224,56v60c-19.89,17.23-38.23,18.39-56,13.48v-60C1
 // факты о месяце: общие для главного экрана и простой аналитики
 function monthFacts(m){
   const cm=ym(today()),isCur=m===cm,day=isCur?+today().slice(8):31;
-  const {prev,now,usual}=spendingComparison(m,day),inc=monthIncome(m);
+  const {prev,now,throughToday,usual}=spendingComparison(m,day),inc=monthIncome(m);
   const fullUsual=prev.length?prev.reduce((s,x)=>s+monthSpend(x),0)/prev.length:0;
   const exp={};for(const c of S.items)if(c.g==='exp')exp[c.id]=c;
   const dim=new Date(+m.slice(0,4),+m.slice(5),0).getDate(),left=dim-day+1,tips=[];
@@ -876,26 +877,26 @@ function monthFacts(m){
   const late=unpaid.filter(r=>r.day<day).sort((a,b)=>a.day-b.day)[0];
   if(late)tips.push(['pay','Не отмечен платёж: '+esc(late.name)+' <b class="num">'+rub(late.sum)+'</b>','var(--bad)']);
   // простой вердикт месяца: тратишь больше обычного / есть что отложить / траты обогнали доходы
-  if(isCur){const free=inc-now-due,over=usual?now/usual-1:0;
+  if(isCur){const free=inc-now-due,over=usual?throughToday/usual-1:0;
     if(over>.1)tips.push(['day','Тратишь больше обычного — на <b class="num">'+Math.round(over*100)+'%</b>','var(--bad)']);
     else if(inc>0&&free<=0)tips.push(['day','Траты уже больше доходов месяца','var(--bad)']);
     else if(inc>0&&free>=1000)tips.push(['day','Молодец! Есть что отложить: <b class="num">'+rub(Math.floor(free/100)*100)+'</b>','var(--good)'])}
   const soon=unpaid.filter(r=>r.day>=day&&r.day-day<=3).sort((a,b)=>a.day-b.day)[0];
   if(soon)tips.push(['pay',(soon.day===day?'Сегодня':soon.day-day===1?'Завтра':soon.day+'-го')+' — '+esc(soon.name)+' <b class="num">'+rub(soon.sum)+'</b>']);
-  if(prev.length){const part=(id,x)=>{let s=0;for(const o of S.ops){if(ym(o.d)!==x||+o.d.slice(8)>day)continue;if(o.to===id)s+=o.sum;if(o.from===id)s-=o.sum}return s};
-    const g=Object.values(exp).map(c=>({c,d:catSpend(c.id,m)-prev.reduce((a,x)=>a+part(c.id,x),0)/prev.length})).filter(x=>x.d>Math.max(1000,now*.05)).sort((a,b)=>b.d-a.d)[0];
+  if(prev.length){
+    const g=Object.values(exp).map(c=>({c,d:catSpend(c.id,m,day)-prev.reduce((a,x)=>a+catSpend(c.id,x,day),0)/prev.length})).filter(x=>x.d>Math.max(1000,throughToday*.05)).sort((a,b)=>b.d-a.d)[0];
     if(g)tips.push(['up',esc(g.c.name)+' — больше обычного на <b class="num">'+rub(Math.round(g.d/100)*100)+'</b>','var(--l-irr)','dyn:'+g.c.id])}
   if(isCur&&usual&&fullUsual&&left>1){const fc=Math.round((now+(fullUsual-usual)*Math.min(1.5,Math.max(.5,now/usual)))/100)*100;tips.push(['fc','К концу месяца — около <b class="num">'+rub(fc)+'</b>',fc>fullUsual*1.05?'var(--bad)':null])}
   if(isCur){const td=S.ops.filter(o=>o.d===today()&&exp[o.to]).reduce((a,o)=>a+o.sum,0);if(td)tips.push(['today','Сегодня потрачено <b class="num">'+rub(td)+'</b>'])}
   if(isCur){const st=streak();if(st>=3)tips.push(['fire','<b>'+st+'</b> '+(st%10===1&&st%100!==11?'день':st%10>=2&&st%10<=4&&(st%100<10||st%100>=20)?'дня':'дней')+' подряд всё записано','#f08c2a'])}
-  const r=usual?now/usual:0,pct=Math.round(Math.abs(r-1)*100);
+  const r=usual?throughToday/usual:0,pct=Math.round(Math.abs(r-1)*100);
   const verdict=!usual?'':pct<5?'как обычно':r<1?'на '+pct+'% меньше обычного':'на '+pct+'% больше обычного';
   const vcol=r>1.05?'var(--bad)':r<.95&&usual?'var(--good)':'var(--muted)';
   const lay={},layCat={},laySub={},addLC=(l,id,v,t)=>{lay[l]=(lay[l]||0)+v;const c=layCat[l]=layCat[l]||{};c[id]=(c[id]||0)+v;
     const k=(t||'').trim().toLowerCase(),ss=(laySub[l]=laySub[l]||{})[id]=(laySub[l]||{})[id]||{};ss[k]=(ss[k]||0)+v};
   for(const o of S.ops){if(ym(o.d)!==m)continue;
     if(exp[o.to])addLC(opLayer(o,exp[o.to]),o.to,o.sum,o.tag);else if(exp[o.from])addLC(opLayer(o,exp[o.from]),o.from,-o.sum,o.tag)}
-  return {m,isCur,day,now,usual,inc,fullUsual,tips,r,verdict,vcol,lay,layCat,laySub};
+  return {m,isCur,day,now,throughToday,usual,inc,fullUsual,tips,r,verdict,vcol,lay,layCat,laySub};
 }
 const tipRow=(ic,html,col,btns,act)=>'<div'+(act?' class="tlink" data-act="'+act+'"':'')+'><svg width="18" height="18" viewBox="0 0 256 256" fill="'+(col||'var(--accent)')+'" aria-hidden="true">'+MS_IC[ic]+'</svg><span class="grow">'+html+'</span>'+(btns||'')+(act?'<svg class="tarr" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>':'')+'</div>';
 // главный экран: одна цифра, полоска и до 3 строк; дела (вчера пусто, копия, переоценка) идут первыми
@@ -929,8 +930,8 @@ function renderMsum(cm){
   if(needBk)acts.push(tipRow('day',bkDays==null?'Копии базы ещё нет':'Копия '+bkDays+' дн. назад','var(--bad)',B('bk-save','Сохранить',1)+B('bk-later','Позже')));
   if(!F.now&&!F.inc&&!acts.length){el.hidden=true;return}el.hidden=false;
   const rows=acts.concat(F.tips.map(t=>tipRow(t[0],t[1],t[2]==='var(--bad)'?t[2]:MU,'',t[3]))).slice(0,Math.max(3,acts.length));
-  el.innerHTML='<div class="ms-head"><span class="sub">'+monthLabel(cm).split(' ')[0]+', потрачено</span><svg class="arr" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></div>'+
-    '<div class="ms-main"><b class="num">'+rub(F.now)+'</b>'+(F.verdict?'<span style="color:'+(F.r>1.05?'var(--bad)':MU)+'">'+F.verdict+'</span>':'')+'</div>'+
+  el.innerHTML='<div class="ms-head"><span class="sub">'+monthLabel(cm).split(' ')[0]+', потрачено к '+F.day+'-му</span><svg class="arr" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></div>'+
+    '<div class="ms-main"><b class="num">'+rub(F.throughToday)+'</b>'+(F.verdict?'<span style="color:'+(F.r>1.05?'var(--bad)':MU)+'">'+F.verdict+'</span>':'')+'</div>'+
     (F.usual?'<div class="track"><i style="width:'+Math.min(100,F.r*100)+'%;background:'+(F.r>1.05?'var(--bad)':'var(--muted)')+';opacity:.7"></i></div>':'')+
     (rows.length?'<div class="ms-tips">'+rows.join('')+'</div>':'');
   el.onclick=e=>{const b=e.target.closest('[data-act]');
@@ -986,7 +987,7 @@ function richSummary(m){
   let inc=Object.entries(by).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);if(inc.length>3)inc=[...inc.slice(0,2),['_',inc.slice(2).reduce((a,x)=>a+x[1],0)]];const it=inc.reduce((a,x)=>a+x[1],0)||1;
   const shade=i=>[100,70,48,30][Math.min(i,3)];
   return '<div class="card rich" style="position:relative">'+(LK.length?'<button class="lay-more" id="lay-more" aria-expanded="'+layOpen+'" aria-label="'+(layOpen?'Свернуть':'Подробно по категориям')+'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="'+(layOpen?'M6 15l6-6 6 6':'M6 9l6 6 6-6')+'"/></svg></button>':'')+
-    '<div class="ms-two"><div><span class="sub" style="display:flex;align-items:center;gap:8px">Потрачено'+'</span><b class="num">'+rub(F.now)+'</b></div><div><span class="sub">'+(F.isCur?'Обычно к '+F.day+'-му':'Обычно за месяц')+'</span><b class="num" style="color:var(--muted)">'+(F.usual?rub(F.usual):'—')+'</b></div></div>'+
+    '<div class="ms-two"><div><span class="sub" style="display:flex;align-items:center;gap:8px">Потрачено'+(F.isCur?' к '+F.day+'-му':'')+'</span><b class="num">'+rub(F.throughToday)+'</b></div><div><span class="sub">'+(F.isCur?'Обычно к '+F.day+'-му':'Обычно за месяц')+'</span><b class="num" style="color:var(--muted)">'+(F.usual?rub(F.usual):'—')+'</b></div></div>'+
     (F.usual?'<div class="trow"><div class="track"><i style="width:'+Math.min(100,F.r*100)+'%;background:'+(F.r>1.05?'var(--bad)':'var(--accent)')+'"></i></div><span style="color:'+F.vcol+'">'+(Math.abs(F.r-1)<.05?'как обычно':(F.r<1?'−':'+')+Math.round(Math.abs(F.r-1)*100)+'%')+'</span></div>':'')+
     (LK.length?'<div class="ms-lay">'+LK.map(k=>'<i style="width:'+(F.lay[k]/lt*100)+'%;background:var('+LAYERS[k].c+')"></i>').join('')+'</div>'+
       '<div class="tr'+(layOpen?' open':'')+'">'+LK.map((k,i)=>{const last=i===LK.length-1;
@@ -1526,14 +1527,14 @@ function renderStats(){
      accs.map(a=>'<div class="row" style="font-size:14px"><span class="grow sub" style="font-size:14px">'+esc(a.it.name)+'</span><span class="num">'+rub(a.v)+'</span></div>').join(''),
      'живые '+rub(live)+' · накопления '+rub(sav));
   // выбор месяца
-  const {prev,now,usual}=spendingComparison(m,day),inc=monthIncome(m);
+  const {prev,now,throughToday,usual}=spendingComparison(m,day),inc=monthIncome(m);
   B.month=sec('month',monthLabel(m),'−'+rub(now),
-     '<div class="sub">'+(isCur?'1–'+day+' число':'весь месяц')+'</div><div class="two"><div><div class="sub">Потрачено</div><div class="big num">'+rub(now)+'</div></div><div><div class="sub">'+(isCur?'Обычно к '+day+'-му':'Обычно за месяц')+'</div><div class="big num" style="color:var(--muted)">'+rub(usual)+'</div></div></div>'+
-     '<div class="track"><i style="width:'+Math.min(100,usual?now/usual*100:0)+'%;background:'+(now>usual?'var(--bad)':'var(--accent)')+'"></i></div>'+
+     '<div class="sub">'+(isCur?'1–'+day+' число':'весь месяц')+'</div><div class="two"><div><div class="sub">Потрачено</div><div class="big num">'+rub(throughToday)+'</div></div><div><div class="sub">'+(isCur?'Обычно к '+day+'-му':'Обычно за месяц')+'</div><div class="big num" style="color:var(--muted)">'+rub(usual)+'</div></div></div>'+
+     '<div class="track"><i style="width:'+Math.min(100,usual?throughToday/usual*100:0)+'%;background:'+(throughToday>usual?'var(--bad)':'var(--accent)')+'"></i></div>'+
      '<div class="row" style="font-size:14px"><span class="grow sub" style="font-size:14px">Доходы</span><b class="num" style="color:var(--good)">+'+fmt(inc)+'</b></div>'+
      '<div class="row" style="font-size:14px"><span class="grow sub" style="font-size:14px">Итог месяца</span><b class="num" style="color:'+(inc-now>=0?'var(--good)':'var(--bad)')+'">'+(inc-now>=0?'+':'−')+rub(Math.abs(inc-now))+'</b></div>'+
      '<div class="sub">Сравнение со средним за '+prev.length+' предыдущих мес.'+(isCur?' к этому же числу':'')+'</div>',
-     usual?(now<=usual?'на '+Math.round((1-now/usual)*100)+'% меньше обычного':'на '+Math.round((now/usual-1)*100)+'% больше обычного')+' · итог '+(inc-now>=0?'+':'−')+fmt(Math.abs(inc-now)):'');
+     usual?(throughToday<=usual?'на '+Math.round((1-throughToday/usual)*100)+'% меньше обычного':'на '+Math.round((throughToday/usual-1)*100)+'% больше обычного')+' · итог '+(inc-now>=0?'+':'−')+fmt(Math.abs(inc-now)):'');
   // 12 месяцев
   const ms=[];for(let k=11;k>=0;k--)ms.push(addMonth(cur,-k));
   const data=ms.map(x=>({m:x,i:monthIncome(x),e:monthSpend(x)}));
@@ -1836,7 +1837,7 @@ function drawDyn(){
 }
 // Тип траты операции: у подкатегории свой тип, если задан, иначе — тип категории
 function opLayer(o,cat){const sl=cat.subLayer||{};const t=o.tag&&o.tag.trim().toLowerCase();return (t&&sl[t])||cat.layer||'base'}
-function catSpend(id,m){let s=0;for(const o of S.ops){if(ym(o.d)!==m)continue;if(o.to===id)s+=o.sum;if(o.from===id)s-=o.sum}return s}
+function catSpend(id,m,day){let s=0;for(const o of S.ops){if(ym(o.d)!==m||(day&&+o.d.slice(8)>day))continue;if(o.to===id)s+=o.sum;if(o.from===id)s-=o.sum}return s}
 
 /* ---------- ещё ---------- */
 // Версия приложения: поднимать вместе с CACHE в sw.js — видно внизу «Ещё», пришло ли обновление
@@ -2284,7 +2285,7 @@ async function openSnaps(){
 // Диагностика темпа расходов: только агрегаты, относительные месяцы и условные суммы.
 function spendingReport(date){
   const month=ym(date),day=+date.slice(8);
-  const {prev,now,usual}=spendingComparison(month,day);
+  const {prev,now,throughToday,usual}=spendingComparison(month,day);
   const expenseIds=[...new Set(S.items.filter(x=>x.g==='exp').map(x=>x.id))];
   const categoryNumbers=new Map(expenseIds.map((id,i)=>[id,i+1]));
   const periods=[...new Set([day,19,31])].sort((a,b)=>a-b).map((end,i,ends)=>[i?ends[i-1]+1:1,end]);
@@ -2333,7 +2334,9 @@ function spendingReport(date){
     cutoffDay:day,
     currentMonthSpending:units(now),
     usualThroughCutoff:units(usual),
-    differencePercent:usual?Math.round((now/usual-1)*100):null,
+    currentMonthThroughCutoff:units(throughToday),
+    differencePercent:usual?Math.round((throughToday/usual-1)*100):null,
+    differencePercentBeforeFix:usual?Math.round((now/usual-1)*100):null,
     months:months.map(row=>({
       monthsAgo:row.offset,
       includedInBaseline:row.includedInBaseline,
