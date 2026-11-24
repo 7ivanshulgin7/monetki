@@ -1,12 +1,14 @@
 // Офлайн-кэш. При обновлении сайта поднять версию в CACHE.
-const CACHE = "monetki-v132";
-const FILES = ["./", "index.html", "manifest.json", "icon-180.png", "icon-192.png", "icon-512.png", "badge-96.png"];
+const CACHE = "monetki-v133";
+const START_URL = self.registration.scope;
+const APP_SHELL = new URL("index.html", START_URL).href;
+const FILES = [START_URL, APP_SHELL, "manifest.json", "icon-180.png", "icon-192.png", "icon-512.png", "badge-96.png"];
 
 // Ставим кэш по файлу: если какой-то не скачался (плохая сеть), установка не срывается целиком.
 // Но без index.html новую версию не ставим — останется старая, рабочая.
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => Promise.allSettled(FILES.map(f => c.add(f)))
-    .then(() => c.match("index.html")).then(hit => { if (!hit) throw new Error("index.html не скачался"); }))
+    .then(() => c.match(APP_SHELL)).then(hit => { if (!hit) throw new Error("index.html не скачался"); }))
     .then(() => self.skipWaiting()));
 });
 // Все PWA лежат на одном сайте 7ivanshulgin7.github.io и делят хранилище кэшей:
@@ -20,6 +22,36 @@ const OFFLINE = '<!doctype html><meta charset="utf-8"><meta name="viewport" cont
   '<body style="margin:0;height:100vh;display:grid;place-items:center;background:#0C0C0E;color:#eee;font:16px system-ui;text-align:center;padding:24px">' +
   '<div><div style="font-size:48px">🪙</div><h2>Нет связи</h2><p style="opacity:.7">Монетки ещё не сохранились на телефоне для работы без сети.<br>Откройте их один раз с интернетом.</p>' +
   '<button onclick="location.reload()" style="margin-top:12px;padding:12px 20px;border:0;border-radius:12px;background:#0F6E64;color:#fff;font:inherit">Попробовать ещё раз</button></div>';
+
+async function cachedApp(){
+  const options = { cacheName: CACHE };
+  return (await caches.match(APP_SHELL, options)) || caches.match(START_URL, options);
+}
+
+async function openApp(){
+  const saved = await cachedApp().catch(() => null);
+  if (saved) return saved;
+
+  try {
+    const response = await timeout(fetch(APP_SHELL, { cache: "no-store" }), 6000);
+    const type = response.headers.get("Content-Type") || "";
+    if (response.ok && !response.redirected && type.toLowerCase().startsWith("text/html")) {
+      // Восстанавливаем копию до открытия страницы, чтобы следующий запуск был доступен без сети.
+      const copy = response.clone();
+      await caches.open(CACHE).then(cache => cache.put(APP_SHELL, copy)).catch(() => {});
+      return response;
+    }
+  } catch (_) {}
+
+  return new Response(OFFLINE, { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } });
+}
+
+self.addEventListener("message", e => {
+  const port = e.ports[0];
+  if (e.data !== "monetki:offline-status" || !port) return;
+  e.waitUntil(cachedApp().then(hit => Boolean(hit), () => null).then(ready => port.postMessage(ready)));
+});
+
 self.addEventListener("fetch", e => {
   const req = e.request;
   if (req.method !== "GET") return;
@@ -37,19 +69,9 @@ self.addEventListener("fetch", e => {
     return;
   }
   if (url.origin !== location.origin) return;
-  // Свои файлы: сразу из кэша — мгновенный запуск и без сети. Новая версия приходит с новым sw.js:
-  // браузер проверяет его сам, ставит новый кэш целиком, и со следующего запуска открывается новая версия.
-  // Ищем во всех кэшах (на случай, если новый кэш ещё не доставился), сеть — только если копии нет совсем,
-  // и не дольше 6 с: при «глючной» сети браузер иначе висит ~20 с и показывает ERR_FAILED.
+  // Каждая версия открывается из своего кэша. Если копия пропала, восстанавливаем её из сети.
   if (req.mode === "navigate") {
-    e.respondWith(caches.match("index.html").then(hit => hit || caches.match("./")).then(hit => {
-      if (hit) {
-        // копию заодно освежаем в фоне, если сеть есть
-        e.waitUntil(fetch("index.html", { cache: "no-store" }).then(r => r.ok && caches.open(CACHE).then(c => c.put("index.html", r))).catch(() => {}));
-        return hit;
-      }
-      return timeout(fetch(req), 6000).catch(() => new Response(OFFLINE, { headers: { "Content-Type": "text/html; charset=utf-8" } }));
-    }));
+    e.respondWith(openApp());
     return;
   }
   e.respondWith(caches.match(req, { ignoreSearch: true }).then(hit => hit || timeout(fetch(req), 6000).then(r => {
