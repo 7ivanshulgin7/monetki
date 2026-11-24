@@ -1,5 +1,5 @@
 // Офлайн-кэш. При обновлении сайта поднять версию в CACHE.
-const CACHE = "monetki-v133";
+const CACHE = "monetki-v134";
 const START_URL = self.registration.scope;
 const APP_SHELL = new URL("index.html", START_URL).href;
 const FILES = [START_URL, APP_SHELL, "manifest.json", "icon-180.png", "icon-192.png", "icon-512.png", "badge-96.png"];
